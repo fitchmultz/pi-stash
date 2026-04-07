@@ -1,0 +1,28 @@
+{
+  "name": "pi-stash",
+  "version": "0.1.0",
+  "description": "A pi extension that stashes in-progress draft messages and restores them later.",
+  "type": "module",
+  "keywords": ["pi-package", "pi-extension", "stash", "draft"],
+  "engines": {
+    "node": ">=20.6.0"
+  },
+  "pi": {
+    "extensions": ["./src/index.ts"]
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "^0.65.2",
+    "@mariozechner/pi-tui": "^0.65.2"
+  },
+  "devDependencies": {
+    "@mariozechner/pi-coding-agent": "^0.65.2",
+    "@mariozechner/pi-tui": "^0.65.2",
+    "@types/node": "^24.3.0",
+    "typescript": "^5.7.3"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --test test/**/*.test.ts",
+    "ci": "npm run typecheck && npm run test"
+  }
+}
