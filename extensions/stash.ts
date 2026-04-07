@@ -299,31 +299,10 @@ export default function piStash(pi: ExtensionAPI): void {
 		},
 	});
 
-	pi.registerCommand("unstash", {
-		description: "Restore the latest stashed draft, or pick from multiple drafts",
-		handler: async (_args, ctx) => {
-			drafts = await restoreLatestOrPick(pi, ctx, drafts);
-		},
-	});
-
 	pi.registerCommand("stash-list", {
 		description: "Browse stashed drafts, restore one, delete one, or clear all",
 		handler: async (_args, ctx) => {
 			drafts = await manageDrafts(pi, ctx, drafts);
-		},
-	});
-
-	pi.registerCommand("stash-peek", {
-		description: "Preview the latest stashed draft",
-		handler: async (_args, ctx) => {
-			peekDraft(ctx, drafts);
-		},
-	});
-
-	pi.registerCommand("stash-clear", {
-		description: "Clear all stashed drafts",
-		handler: async (_args, ctx) => {
-			drafts = clearDrafts(pi, ctx);
 		},
 	});
 }

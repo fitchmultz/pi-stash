@@ -38,10 +38,7 @@ Then run `/reload` inside `pi`.
 
 - `/stash` — stash the current editor text
 - `/stash some text` — stash explicit text
-- `/unstash` — restore immediately or open the picker for multiple stashes
 - `/stash-list` — browse, restore, delete, or clear stashes
-- `/stash-peek` — preview the latest draft
-- `/stash-clear` — clear all stashed drafts
 
 ## Why `Ctrl+Shift+R` for retrieval?
 
