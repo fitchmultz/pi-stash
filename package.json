@@ -1,18 +1,45 @@
 {
-  "name": "pi-stash",
+  "name": "@fitchmultz/pi-stash",
   "version": "0.1.0",
-  "description": "A pi extension that stashes in-progress draft messages and restores them later.",
+  "description": "A pi extension for stashing draft messages and restoring them later.",
   "type": "module",
-  "keywords": ["pi-package", "pi-extension", "stash", "draft"],
+  "author": "Mitch Fultz (https://github.com/fitchmultz)",
+  "license": "MIT",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-extension",
+    "extension",
+    "stash",
+    "draft"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fitchmultz/pi-stash.git"
+  },
+  "bugs": {
+    "url": "https://github.com/fitchmultz/pi-stash/issues"
+  },
+  "homepage": "https://github.com/fitchmultz/pi-stash#readme",
   "engines": {
     "node": ">=20.6.0"
   },
+  "files": [
+    "extensions",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "pi": {
-    "extensions": ["./src/index.ts"]
+    "extensions": [
+      "./extensions/stash.ts"
+    ]
   },
   "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "^0.65.2",
-    "@mariozechner/pi-tui": "^0.65.2"
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-tui": "*"
   },
   "devDependencies": {
     "@mariozechner/pi-coding-agent": "^0.65.2",
@@ -23,6 +50,7 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "node --test test/**/*.test.ts",
-    "ci": "npm run typecheck && npm run test"
+    "ci": "npm run typecheck && npm run test",
+    "prepublishOnly": "npm run ci"
   }
 }

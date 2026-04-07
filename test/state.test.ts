@@ -1,7 +1,7 @@
 /**
  * Purpose: Verify the pure stash-state helpers used by the pi-stash extension.
  * Responsibilities: Cover hydration, stack push/pop behavior, indexed removal, selection clamping, and preview formatting.
- * Scope: Unit tests for src/state.ts only.
+ * Scope: Unit tests for extensions/state.ts only.
  * Usage: Run with `npm test` or `node --test test`.
  * Invariants/Assumptions: Tests avoid pi runtime dependencies and assert only stable helper behavior.
  */
@@ -19,7 +19,7 @@ import {
 	pushDraft,
 	removeDraftAt,
 	STASH_ENTRY_TYPE,
-} from "../src/state.ts";
+} from "../extensions/state.ts";
 
 test("hydrateState returns the latest valid stash snapshot", () => {
 	const state = hydrateState([

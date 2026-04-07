@@ -1,6 +1,28 @@
 # pi-stash
 
-`pi-stash` is a small `pi` extension for parking an in-progress draft, sending something else, then restoring the draft afterward.
+`pi-stash` is a `pi` extension for parking an in-progress draft, sending something else, then restoring the draft afterward.
+
+## Install
+
+From npm:
+
+```bash
+pi install npm:@fitchmultz/pi-stash
+```
+
+From GitHub:
+
+```bash
+pi install https://github.com/fitchmultz/pi-stash
+```
+
+For local development:
+
+```bash
+pi install .
+```
+
+Then run `/reload` inside `pi`.
 
 ## Design
 
@@ -24,22 +46,6 @@
 ## Why `Ctrl+Shift+R` for retrieval?
 
 `Ctrl+Shift+S` appears free in the current `pi` keybinding docs, and `Ctrl+Shift+R` is also currently unassigned and mnemonic for **restore**.
-
-## Install locally
-
-From this repo:
-
-```bash
-pi install .
-```
-
-Or for one-off testing:
-
-```bash
-pi -e .
-```
-
-Then run `/reload` inside `pi`.
 
 ## Usage flow
 
