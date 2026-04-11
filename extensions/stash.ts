@@ -3,7 +3,7 @@
  * Responsibilities: Capture editor drafts, restore them later, persist stash state, and expose shortcuts and picker-based stash management.
  * Scope: Interactive editor draft management for a single pi session.
  * Usage: Install as a pi package, then use Ctrl+Shift+S to stash and Ctrl+Shift+R to restore or pick from multiple drafts.
- * Invariants/Assumptions: Drafts are restored newest-first by default, blank drafts are never stashed, and multi-stash restore uses an explicit picker before mutating state.
+ * Invariants/Assumptions: Drafts are restored newest-first by default, blank drafts are never stashed, and degraded clients fall back to confirmation or summary flows instead of crashing.
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
@@ -19,7 +19,7 @@ import {
 	pushDraft,
 	removeDraftAt,
 	STASH_ENTRY_TYPE,
-} from "./state.js";
+} from "./state.ts";
 
 interface DraftPickerResultRestore {
 	action: "restore";
@@ -39,11 +39,29 @@ interface DraftPickerResultCancel {
 	action: "cancel";
 }
 
+interface DraftPickerResultUnsupported {
+	action: "unsupported";
+}
+
 type DraftPickerResult =
 	| DraftPickerResultRestore
 	| DraftPickerResultDelete
 	| DraftPickerResultClear
-	| DraftPickerResultCancel;
+	| DraftPickerResultCancel
+	| DraftPickerResultUnsupported;
+
+function getThemeForeground(ctx: ExtensionContext): ((name: string, value: string) => string) | undefined {
+	const theme = ctx.ui.theme as { fg?: (name: string, value: string) => string } | undefined;
+	return typeof theme?.fg === "function" ? theme.fg.bind(theme) : undefined;
+}
+
+function formatStatusText(ctx: ExtensionContext, text: string): string {
+	return getThemeForeground(ctx)?.("accent", text) ?? text;
+}
+
+function requiresReplaceConfirmation(ctx: ExtensionContext): boolean {
+	return getThemeForeground(ctx) === undefined;
+}
 
 function updateStatus(ctx: ExtensionContext, drafts: readonly string[]): void {
 	if (drafts.length === 0) {
@@ -51,7 +69,7 @@ function updateStatus(ctx: ExtensionContext, drafts: readonly string[]): void {
 		return;
 	}
 
-	ctx.ui.setStatus("pi-stash", ctx.ui.theme.fg("accent", `📦 ${countLabel(drafts.length)}`));
+	ctx.ui.setStatus("pi-stash", formatStatusText(ctx, `📦 ${countLabel(drafts.length)}`));
 }
 
 function persistState(pi: ExtensionAPI, drafts: readonly string[]): void {
@@ -96,7 +114,7 @@ function insertDraftIntoEditor(ctx: ExtensionContext, draft: string): void {
 	ctx.ui.pasteToEditor(draft);
 }
 
-function restoreDraftAt(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly string[], index: number): string[] {
+async function restoreDraftAt(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly string[], index: number): Promise<string[]> {
 	if (!ensureEditor(ctx, "Restoring")) return [...drafts];
 
 	const { draft, remaining } = removeDraftAt(drafts, index);
@@ -105,21 +123,24 @@ function restoreDraftAt(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonl
 		return [...drafts];
 	}
 
-	insertDraftIntoEditor(ctx, draft);
+	if (requiresReplaceConfirmation(ctx)) {
+		const confirmed = await ctx.ui.confirm(
+			"Replace editor with stashed draft?",
+			"This client cannot safely merge stashed drafts with existing editor text. Restoring will replace the current editor contents.",
+		);
+		if (!confirmed) {
+			ctx.ui.notify("Restore cancelled", "info");
+			return [...drafts];
+		}
+
+		ctx.ui.setEditorText(draft);
+	} else {
+		insertDraftIntoEditor(ctx, draft);
+	}
 	persistState(pi, remaining);
 	updateStatus(ctx, remaining);
 	ctx.ui.notify(`Restored draft: ${previewDraft(draft)}`, "info");
 	return remaining;
-}
-
-function peekDraft(ctx: ExtensionContext, drafts: readonly string[]): void {
-	const [draft] = drafts;
-	if (!draft) {
-		ctx.ui.notify("No stashed drafts", "info");
-		return;
-	}
-
-	ctx.ui.notify(`Top stash (${countLabel(drafts.length)}): ${previewDraft(draft)}`, "info");
 }
 
 function clearDrafts(pi: ExtensionAPI, ctx: ExtensionContext): string[] {
@@ -127,6 +148,10 @@ function clearDrafts(pi: ExtensionAPI, ctx: ExtensionContext): string[] {
 	updateStatus(ctx, []);
 	ctx.ui.notify("Cleared stashed drafts", "info");
 	return [];
+}
+
+function summarizeDrafts(drafts: readonly string[]): string {
+	return drafts.map((draft, index) => `${index + 1}. ${previewDraft(draft, 64)}`).join("\n");
 }
 
 function buildDraftItems(drafts: readonly string[]): SelectItem[] {
@@ -148,7 +173,7 @@ async function showDraftPicker(
 ): Promise<DraftPickerResult> {
 	const items = buildDraftItems(drafts);
 
-	return ctx.ui.custom<DraftPickerResult>((tui, theme, _keybindings, done) => {
+	const result = await ctx.ui.custom<DraftPickerResult>((tui, theme, _keybindings, done) => {
 		const container = new Container();
 		container.addChild(new DynamicBorder((text) => theme.fg("accent", text)));
 		container.addChild(new Text(theme.fg("accent", theme.bold(`Stashed Drafts (${drafts.length})`))));
@@ -205,9 +230,20 @@ async function showDraftPicker(
 			},
 		};
 	});
+
+	return result ?? { action: "unsupported" };
 }
 
-async function manageDrafts(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly string[]): Promise<string[]> {
+interface ManageDraftsOptions {
+	onUnsupported: "list" | "restore-latest";
+}
+
+async function manageDrafts(
+	pi: ExtensionAPI,
+	ctx: ExtensionContext,
+	drafts: readonly string[],
+	options: ManageDraftsOptions = { onUnsupported: "list" },
+): Promise<string[]> {
 	if (!ensureEditor(ctx, "Listing stashes")) return [...drafts];
 	if (drafts.length === 0) {
 		ctx.ui.notify("No stashed drafts", "info");
@@ -220,12 +256,22 @@ async function manageDrafts(pi: ExtensionAPI, ctx: ExtensionContext, drafts: rea
 	while (nextDrafts.length > 0) {
 		const result = await showDraftPicker(ctx, nextDrafts, selectedIndex);
 
+		if (result.action === "unsupported") {
+			if (options.onUnsupported === "restore-latest") {
+				ctx.ui.notify("Stash picker unavailable in this client; using the latest stash for restore.", "info");
+				return await restoreDraftAt(pi, ctx, nextDrafts, 0);
+			}
+
+			ctx.ui.notify(`Stashed drafts (latest first):\n${summarizeDrafts(nextDrafts)}`, "info");
+			return nextDrafts;
+		}
+
 		if (result.action === "cancel") {
 			return nextDrafts;
 		}
 
 		if (result.action === "restore") {
-			return restoreDraftAt(pi, ctx, nextDrafts, result.index);
+			return await restoreDraftAt(pi, ctx, nextDrafts, result.index);
 		}
 
 		if (result.action === "clear") {
@@ -258,18 +304,26 @@ async function restoreLatestOrPick(pi: ExtensionAPI, ctx: ExtensionContext, draf
 	}
 
 	if (drafts.length === 1) {
-		return restoreDraftAt(pi, ctx, drafts, 0);
+		return await restoreDraftAt(pi, ctx, drafts, 0);
 	}
 
-	return manageDrafts(pi, ctx, drafts);
+	return manageDrafts(pi, ctx, drafts, { onUnsupported: "restore-latest" });
 }
 
 export default function piStash(pi: ExtensionAPI): void {
 	let drafts: string[] = [];
 
-	pi.on("session_start", async (_event, ctx) => {
-		drafts = hydrateState(ctx.sessionManager.getEntries()).drafts;
+	const syncDraftsFromBranch = (ctx: ExtensionContext) => {
+		drafts = hydrateState(ctx.sessionManager.getBranch()).drafts;
 		updateStatus(ctx, drafts);
+	};
+
+	pi.on("session_start", async (_event, ctx) => {
+		syncDraftsFromBranch(ctx);
+	});
+
+	pi.on("session_tree", async (_event, ctx) => {
+		syncDraftsFromBranch(ctx);
 	});
 
 	pi.registerShortcut("ctrl+shift+s", {
@@ -289,9 +343,12 @@ export default function piStash(pi: ExtensionAPI): void {
 	pi.registerCommand("stash", {
 		description: "Stash the current editor draft, or stash the provided text",
 		handler: async (args, ctx) => {
-			const explicitDraft = args.trim();
-			if (explicitDraft.length > 0) {
-				drafts = stashDraft(pi, ctx, drafts, explicitDraft);
+			if (args.length > 0) {
+				if (isBlankDraft(args)) {
+					ctx.ui.notify("Nothing to stash", "warning");
+					return;
+				}
+				drafts = stashDraft(pi, ctx, drafts, args);
 				return;
 			}
 

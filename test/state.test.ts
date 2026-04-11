@@ -1,8 +1,8 @@
 /**
  * Purpose: Verify the pure stash-state helpers used by the pi-stash extension.
- * Responsibilities: Cover hydration, stack push/pop behavior, indexed removal, selection clamping, and preview formatting.
+ * Responsibilities: Cover hydration, stack push behavior, indexed removal, selection clamping, and preview formatting.
  * Scope: Unit tests for extensions/state.ts only.
- * Usage: Run with `npm test` or `node --test test`.
+ * Usage: Run with `npm test` or `npm run test:node20`; both commands transpile the test bundle into `.tmp/test-dist/` first.
  * Invariants/Assumptions: Tests avoid pi runtime dependencies and assert only stable helper behavior.
  */
 
@@ -14,7 +14,6 @@ import {
 	countLabel,
 	hydrateState,
 	MAX_STASHED_DRAFTS,
-	popDraft,
 	previewDraft,
 	pushDraft,
 	removeDraftAt,
@@ -47,13 +46,6 @@ test("pushDraft keeps newest drafts first and enforces the limit", () => {
 	assert.equal(next.length, MAX_STASHED_DRAFTS);
 	assert.equal(next[0], "fresh");
 	assert.equal(next.at(-1), `draft-${MAX_STASHED_DRAFTS - 2}`);
-});
-
-test("popDraft returns the top draft and remaining stack", () => {
-	const result = popDraft(["top", "older"]);
-
-	assert.equal(result.draft, "top");
-	assert.deepEqual(result.remaining, ["older"]);
 });
 
 test("removeDraftAt removes the selected draft and keeps neighboring selection stable", () => {

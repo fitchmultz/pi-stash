@@ -1,6 +1,6 @@
 {
   "name": "@fitchmultz/pi-stash",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A pi extension for stashing draft messages and restoring them later.",
   "type": "module",
   "author": "Mitch Fultz (https://github.com/fitchmultz)",
@@ -27,6 +27,7 @@
   "files": [
     "extensions",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "publishConfig": {
@@ -48,9 +49,15 @@
     "typescript": "^5.7.3"
   },
   "scripts": {
+    "clean:test": "node -e \"require('node:fs').rmSync('.tmp/test-dist', { recursive: true, force: true });\"",
+    "build:test": "npm run clean:test && tsc -p tsconfig.test.json",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "node --test test/**/*.test.ts",
+    "test": "npm run build:test && cd .tmp/test-dist && node --test",
+    "test:node20": "npm run build:test && cd .tmp/test-dist && npx -y node@20.6.0 --test",
+    "audit": "npm audit --audit-level=high",
+    "pack:check": "npm pack --dry-run",
     "ci": "npm run typecheck && npm run test",
-    "prepublishOnly": "npm run ci"
+    "validate": "npm run ci && npm run test:node20 && npm run audit && npm run pack:check",
+    "prepublishOnly": "npm run validate"
   }
 }

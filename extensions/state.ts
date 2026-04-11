@@ -37,11 +37,6 @@ export function pushDraft(drafts: readonly string[], draft: string, limit = MAX_
 	return [draft, ...drafts].slice(0, limit);
 }
 
-export function popDraft(drafts: readonly string[]): { draft: string | undefined; remaining: string[] } {
-	const [draft, ...remaining] = drafts;
-	return { draft, remaining };
-}
-
 export function clampSelectedIndex(index: number, length: number): number {
 	if (length <= 0) return 0;
 	return Math.max(0, Math.min(index, length - 1));
