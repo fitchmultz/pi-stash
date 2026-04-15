@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.3] - 2026-04-15
+
+### Changed
+- refreshed the local development and release toolchain to `@mariozechner/pi-coding-agent` / `@mariozechner/pi-tui` `0.67.2`, `typescript` `6.0.2`, and `@types/node` `25.6.0`
+- pinned `packageManager` metadata to `npm@11.12.1` and refreshed the lockfile so release verification resolves reproducibly against the current stable toolchain
+
 ## [0.1.2] - 2026-04-11
 
 ### Fixed
