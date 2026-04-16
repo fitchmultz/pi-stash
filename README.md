@@ -15,10 +15,10 @@ From npm:
 pi install npm:@fitchmultz/pi-stash
 ```
 
-From a tagged GitHub release:
+From GitHub:
 
 ```bash
-pi install https://github.com/fitchmultz/pi-stash@v0.1.2
+pi install https://github.com/fitchmultz/pi-stash
 ```
 
 For local development:
