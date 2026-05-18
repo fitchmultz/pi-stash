@@ -2,7 +2,7 @@
  * Purpose: Verify the pure stash-state helpers used by the pi-stash extension.
  * Responsibilities: Cover hydration, stack push behavior, indexed removal, selection clamping, and preview formatting.
  * Scope: Unit tests for extensions/state.ts only.
- * Usage: Run with `npm test` or `npm run test:node20`; both commands transpile the test bundle into `.tmp/test-dist/` first.
+ * Usage: Run with `npm test` or `npm run test:node22`; both commands transpile the test bundle into `.tmp/test-dist/` first.
  * Invariants/Assumptions: Tests avoid pi runtime dependencies and assert only stable helper behavior.
  */
 

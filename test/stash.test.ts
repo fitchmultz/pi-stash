@@ -2,7 +2,7 @@
  * Purpose: Verify branch-aware and RPC-safe behavior for the pi-stash extension entrypoint.
  * Responsibilities: Cover branch rehydration, explicit `/stash` argument preservation, and RPC fallbacks when custom UI is unavailable.
  * Scope: Integration-style tests around `extensions/stash.ts` with mocked pi extension APIs.
- * Usage: Run with `npm test` or `npm run test:node20`; both commands transpile the test bundle into `.tmp/test-dist/` first.
+ * Usage: Run with `npm test` or `npm run test:node22`; both commands transpile the test bundle into `.tmp/test-dist/` first.
  * Invariants/Assumptions: Mocked contexts emulate the extension API surface closely enough to catch stash-state regressions without spinning up a full pi runtime.
  */
 

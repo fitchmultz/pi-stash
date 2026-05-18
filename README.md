@@ -4,7 +4,7 @@
 
 ## Requirements
 
-- `pi` running on Node.js `>=20.6.0`
+- `pi` running on Node.js `>=22.19.0`
 - npm for local validation and publishing
 
 ## Install
@@ -32,12 +32,12 @@ Then run `/reload` inside `pi`.
 
 ## Development and validation
 
-`pi` loads the extension from the source `.ts` files, but local tests are transpiled into `.tmp/test-dist/` before Node runs them so validation works on the declared Node 20.6 floor.
+`pi` loads the extension from the source `.ts` files, but local tests are transpiled into `.tmp/test-dist/` before Node runs them so validation works on the declared Node 22.19 floor.
 
 ```bash
 npm run ci          # typecheck + transpiled tests
-npm run test:node20 # explicit Node 20.6 compatibility check
-npm run validate    # ci + Node 20.6 check + audit + pack dry-run
+npm run test:node22 # explicit Node 22.19 compatibility check
+npm run validate    # ci + Node 22.19 check + audit + pack dry-run
 ```
 
 ## Design
