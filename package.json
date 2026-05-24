@@ -22,7 +22,7 @@
   },
   "homepage": "https://github.com/fitchmultz/pi-stash#readme",
   "engines": {
-    "node": ">=22.19.0"
+    "node": ">=22 <25"
   },
   "files": [
     "extensions",
@@ -60,5 +60,5 @@
     "prepublishOnly": "npm run validate",
     "test:node22": "npm run build:test && cd .tmp/test-dist && npx -y node@22.19.0 --test"
   },
-  "packageManager": "npm@11.15.0"
+  "packageManager": "npm@11.0.0"
 }
