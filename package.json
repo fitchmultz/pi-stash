@@ -22,7 +22,7 @@
   },
   "homepage": "https://github.com/fitchmultz/pi-stash#readme",
   "engines": {
-    "node": ">=22.19.0"
+    "node": ">=22 <25"
   },
   "files": [
     "extensions",
@@ -43,8 +43,8 @@
     "@earendil-works/pi-tui": "*"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "^0.77.0",
-    "@earendil-works/pi-tui": "^0.77.0",
+    "@earendil-works/pi-coding-agent": "^0.78.0",
+    "@earendil-works/pi-tui": "^0.78.0",
     "@types/node": "^25.9.1",
     "typescript": "^6.0.3"
   },
@@ -60,7 +60,7 @@
     "prepublishOnly": "npm run validate",
     "test:node22": "npm run build:test && cd .tmp/test-dist && npx -y node@22.19.0 --test"
   },
-  "packageManager": "npm@11.16.0",
+  "packageManager": "npm@11.0.0",
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {
       "optional": true
