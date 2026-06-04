@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.1.16] - 2026-06-04
+
+### Fixed
+- fixed interactive restore prompts in sessions where the extension context does not expose `ctx.mode`; the stash picker and restore flow now only use non-TUI fallbacks for explicit RPC, JSON, or print modes
+
 ## [0.1.15] - 2026-06-04
 
 ### Changed

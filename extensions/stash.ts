@@ -60,11 +60,11 @@ function formatStatusText(ctx: ExtensionContext, text: string): string {
 }
 
 function supportsCustomPicker(ctx: ExtensionContext): boolean {
-	return ctx.mode === "tui";
+	return ctx.mode !== "rpc" && ctx.mode !== "json" && ctx.mode !== "print";
 }
 
 function requiresReplaceConfirmation(ctx: ExtensionContext): boolean {
-	return ctx.mode !== "tui";
+	return ctx.mode === "rpc";
 }
 
 function updateStatus(ctx: ExtensionContext, drafts: readonly string[]): void {

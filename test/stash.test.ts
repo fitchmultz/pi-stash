@@ -46,7 +46,7 @@ interface TestUI {
 }
 
 interface TestContext {
-	mode: "tui" | "rpc" | "json" | "print";
+	mode?: "tui" | "rpc" | "json" | "print";
 	hasUI: boolean;
 	ui: TestUI;
 	sessionManager: {
@@ -101,6 +101,8 @@ function createContext(options: {
 	customResult?: unknown;
 	confirmResult?: boolean;
 	hasUI?: boolean;
+	mode?: "tui" | "rpc" | "json" | "print";
+	omitMode?: boolean;
 }) {
 	const notifications: Notification[] = [];
 	const statuses: StatusUpdate[] = [];
@@ -111,7 +113,9 @@ function createContext(options: {
 	const confirmResult = options.confirmResult ?? true;
 
 	const ctx: TestContext = {
-		mode: options.hasUI === false ? "print" : options.theme ? "tui" : "rpc",
+		...(options.omitMode
+			? {}
+			: { mode: options.mode ?? (options.hasUI === false ? "print" : options.theme ? "tui" : "rpc") }),
 		hasUI: options.hasUI ?? true,
 		ui: {
 			theme: options.theme,
@@ -212,6 +216,26 @@ test("stash state rehydrates from the current branch on session start and tree n
 	assert.deepEqual(harness.appended.at(-1), {
 		type: STASH_ENTRY_TYPE,
 		data: { drafts: ["after tree", "tree branch draft"] },
+	});
+});
+
+test("legacy interactive restore without ctx.mode still appends without replace confirmation", async () => {
+	const harness = createHarness();
+	const context = createContext({
+		branchEntries: [],
+		allEntries: [],
+		confirmResult: false,
+		editorText: "host draft",
+		omitMode: true,
+	});
+
+	await harness.commands.get("stash")?.handler("latest", context.ctx);
+	await harness.shortcuts.get("ctrl+shift+r")?.handler(context.ctx);
+
+	assert.equal(context.editorText, "host draftlatest");
+	assert.deepEqual(harness.appended.at(-1), {
+		type: STASH_ENTRY_TYPE,
+		data: { drafts: [] },
 	});
 });
 
