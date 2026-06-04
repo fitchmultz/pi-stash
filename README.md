@@ -4,7 +4,7 @@
 
 ## Requirements
 
-- `pi` running on Node.js `>=22.19.0`
+- `pi` running on Node.js `>=22.19.0`; Pi `0.78.1` or newer is the current tested baseline
 - npm for local validation and publishing
 
 ## Install
@@ -30,7 +30,7 @@ pi install .
 
 Then run `/reload` inside `pi`.
 
-Compatibility note: this package is tested against the current pi release during each package update, and pi-bundled runtime packages are declared as optional wildcard peers. That keeps installs forward-open for future pi releases: npm peer ranges should not block users from trying a newer pi, though runtime behavior is only verified against the tested baseline until a follow-up package release confirms it.
+Compatibility note: this package is tested against the current pi release during each package update, and pi-bundled runtime packages are declared as optional wildcard peers. Pi `0.78.1` is the current tested floor, not a hard npm peer requirement. That keeps installs forward-open for future pi releases: npm peer ranges should not block users from trying a newer pi, though runtime behavior is only verified against the tested baseline until a follow-up package release confirms it.
 
 ## Development and validation
 
@@ -47,7 +47,7 @@ npm run validate    # ci + Node 22.19 check + audit + pack dry-run
 - `Ctrl+Shift+S` stashes the current editor text and clears the editor.
 - `Ctrl+Shift+R` restores immediately when there is one stash, or opens a picker when there are multiple stashes.
 - The stash picker supports arrow-key navigation, `Enter` to restore, `Ctrl+D` to delete the selected stash, and `Ctrl+X` to clear all stashes.
-- When custom TUI overlays are unavailable (for example some RPC clients), restore falls back to a replace-editor confirmation for the latest stash, and `/stash-list` prints a latest-first summary instead of crashing.
+- In non-TUI clients such as RPC, restore falls back to a replace-editor confirmation for the latest stash, and `/stash-list` prints a latest-first summary instead of trying to open the TUI picker.
 - Restores use `pasteToEditor()` when the editor already has text, so retrieval does not destroy whatever is currently in the box.
 - Drafts are kept as a small LIFO stack, so repeated stashes still work naturally.
 - The current stash stack is persisted in session metadata, so `/reload`, session resume, and `/tree` branch navigation keep drafts aligned with the active branch.

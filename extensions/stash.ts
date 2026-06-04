@@ -59,8 +59,12 @@ function formatStatusText(ctx: ExtensionContext, text: string): string {
 	return getThemeForeground(ctx)?.("accent", text) ?? text;
 }
 
+function supportsCustomPicker(ctx: ExtensionContext): boolean {
+	return ctx.mode === "tui";
+}
+
 function requiresReplaceConfirmation(ctx: ExtensionContext): boolean {
-	return getThemeForeground(ctx) === undefined;
+	return ctx.mode !== "tui";
 }
 
 function updateStatus(ctx: ExtensionContext, drafts: readonly string[]): void {
@@ -126,7 +130,7 @@ async function restoreDraftAt(pi: ExtensionAPI, ctx: ExtensionContext, drafts: r
 	if (requiresReplaceConfirmation(ctx)) {
 		const confirmed = await ctx.ui.confirm(
 			"Replace editor with stashed draft?",
-			"This client cannot safely merge stashed drafts with existing editor text. Restoring will replace the current editor contents.",
+			"This non-TUI client cannot safely merge stashed drafts with existing editor text. Restoring will replace the current editor contents.",
 		);
 		if (!confirmed) {
 			ctx.ui.notify("Restore cancelled", "info");
@@ -171,6 +175,8 @@ async function showDraftPicker(
 	drafts: readonly string[],
 	selectedIndex: number,
 ): Promise<DraftPickerResult> {
+	if (!supportsCustomPicker(ctx)) return { action: "unsupported" };
+
 	const items = buildDraftItems(drafts);
 
 	const result = await ctx.ui.custom<DraftPickerResult>((tui, theme, _keybindings, done) => {

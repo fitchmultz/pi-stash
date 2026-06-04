@@ -46,6 +46,7 @@ interface TestUI {
 }
 
 interface TestContext {
+	mode: "tui" | "rpc" | "json" | "print";
 	hasUI: boolean;
 	ui: TestUI;
 	sessionManager: {
@@ -110,6 +111,7 @@ function createContext(options: {
 	const confirmResult = options.confirmResult ?? true;
 
 	const ctx: TestContext = {
+		mode: options.hasUI === false ? "print" : options.theme ? "tui" : "rpc",
 		hasUI: options.hasUI ?? true,
 		ui: {
 			theme: options.theme,

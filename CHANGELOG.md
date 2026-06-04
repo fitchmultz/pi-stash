@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.1.15] - 2026-06-04
+
+### Changed
+- updated the local pi development baseline to `@earendil-works/pi-coding-agent` / `@earendil-works/pi-tui` `0.78.1` and regenerated the npm lockfile
+- replaced the degraded-client picker workaround with the Pi `0.78.1` `ctx.mode` API so non-TUI clients use explicit fallback flows instead of inferring support from theme availability
+
+### Compatibility
+- reviewed the pi `0.78.1` changelog, extension docs, package guidance, keybinding docs, and current extension examples; the package still keeps pi runtime packages as optional wildcard peers and treats `0.78.1` as the tested baseline rather than a hard install requirement
+
 ## [0.1.14] - 2026-05-28
 
 ### Changed
