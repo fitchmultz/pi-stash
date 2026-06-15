@@ -4,10 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-## [0.1.17] - 2026-06-15
+## [0.1.18] - 2026-06-15
 
 ### Changed
 - updated the local pi development baseline to `@earendil-works/pi-coding-agent` / `@earendil-works/pi-tui` `0.79.4` and refreshed the npm lockfile
+- narrowed the release audit to production dependencies with `npm audit --omit=dev --audit-level=high`, because pi runtime packages are optional peer dependencies and are not shipped in the extension tarball
 
 ### Validation
 - ran `npm run ci` and `npm run validate` under pi `0.79.4`
