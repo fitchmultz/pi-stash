@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.1.17] - 2026-06-15
+
+### Changed
+- updated the local pi development baseline to `@earendil-works/pi-coding-agent` / `@earendil-works/pi-tui` `0.79.4` and refreshed the npm lockfile
+
+### Validation
+- ran `npm run ci` and `npm run validate` under pi `0.79.4`
+
 ## [0.1.16] - 2026-06-04
 
 ### Fixed
