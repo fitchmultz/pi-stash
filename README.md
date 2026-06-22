@@ -4,7 +4,7 @@
 
 ## Requirements
 
-- `pi` running on Node.js `>=22.19.0`; Pi `0.78.1` or newer is the current tested baseline
+- `pi` running on Node.js `>=22.19.0`; Pi `0.79.10` or newer is the current tested baseline
 - npm for local validation and publishing
 
 ## Install
@@ -30,7 +30,7 @@ pi install .
 
 Then run `/reload` inside `pi`.
 
-Compatibility note: this package is tested against the current pi release during each package update, and pi-bundled runtime packages are declared as optional wildcard peers. Pi `0.78.1` is the current tested floor, not a hard npm peer requirement. That keeps installs forward-open for future pi releases: npm peer ranges should not block users from trying a newer pi, though runtime behavior is only verified against the tested baseline until a follow-up package release confirms it.
+Compatibility note: this package is tested against the current pi release during each package update, and pi-bundled runtime packages are declared as optional wildcard peers. Pi `0.79.10` is the current tested floor, not a hard npm peer requirement. That keeps installs forward-open for future pi releases: npm peer ranges should not block users from trying a newer pi, though runtime behavior is only verified against the tested baseline until a follow-up package release confirms it.
 
 ## Development and validation
 

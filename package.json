@@ -1,6 +1,6 @@
 {
   "name": "@fitchmultz/pi-stash",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "description": "A pi extension for stashing draft messages and restoring them later.",
   "type": "module",
   "author": "Mitch Fultz (https://github.com/fitchmultz)",
@@ -43,8 +43,8 @@
     "@earendil-works/pi-tui": "*"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "0.79.4",
-    "@earendil-works/pi-tui": "0.79.4",
+    "@earendil-works/pi-coding-agent": "^0.79.10",
+    "@earendil-works/pi-tui": "^0.79.10",
     "@types/node": "^25.9.1",
     "typescript": "^6.0.3"
   },
