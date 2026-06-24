@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.1.21] - 2026-06-24
+
+### Changed
+- updated the local pi development baseline to `@earendil-works/pi-coding-agent` / `@earendil-works/pi-tui` `0.80.2` and refreshed the npm lockfile
+- refreshed README compatibility notes for pi `0.80.2`
+- added an isolated `pi install .` package-load smoke to the validation gate
+- aligned the stash picker with Pi's positive `ctx.mode === "tui"` custom-UI guard and keybinding-aware picker hints
+
+### Validation
+- ran `npm run validate`; it now includes typecheck, transpiled tests, Node 22.19 tests, production audit, pack dry-run, and the package-load smoke
+
 ## [0.1.20] - 2026-06-23
 
 ### Changed
@@ -12,7 +23,7 @@ All notable changes to this project will be documented in this file.
 - reviewed the Pi 0.80.0/0.80.1 changelog; no runtime source migration was required
 
 ### Validation
-- Pending in this release train.
+- release validation was deferred to the next package update.
 
 ## [0.1.19] - 2026-06-22
 

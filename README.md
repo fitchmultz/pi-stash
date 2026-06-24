@@ -4,7 +4,7 @@
 
 ## Requirements
 
-- `pi` running on Node.js `>=22.19.0`; Pi `0.80.1` or newer is the current tested baseline
+- `pi` running on Node.js `>=22.19.0`; Pi `0.80.2` or newer is the current tested baseline
 - npm for local validation and publishing
 
 ## Install
@@ -30,16 +30,17 @@ pi install .
 
 Then run `/reload` inside `pi`.
 
-Compatibility note: this package is tested against the current pi release during each package update, and pi-bundled runtime packages are declared as optional wildcard peers. Pi `0.80.1` is the current tested floor, not a hard npm peer requirement. That keeps installs forward-open for future pi releases: npm peer ranges should not block users from trying a newer pi, though runtime behavior is only verified against the tested baseline until a follow-up package release confirms it.
+Compatibility note: this package is tested against the current pi release during each package update, and pi-bundled runtime packages are declared as optional wildcard peers. Pi `0.80.2` is the current tested floor, not a hard npm peer requirement. That keeps installs forward-open for future pi releases: npm peer ranges should not block users from trying a newer pi, though runtime behavior is only verified against the tested baseline until a follow-up package release confirms it.
 
 ## Development and validation
 
 `pi` loads the extension from the source `.ts` files, but local tests are transpiled into `.tmp/test-dist/` before Node runs them so validation works on the declared Node 22.19 floor.
 
 ```bash
-npm run ci          # typecheck + transpiled tests
-npm run test:node22 # explicit Node 22.19 compatibility check
-npm run validate    # ci + Node 22.19 check + audit + pack dry-run
+npm run ci            # typecheck + transpiled tests
+npm run test:node22   # explicit Node 22.19 compatibility check
+npm run smoke:package # isolated pi install/load smoke
+npm run validate      # ci + Node 22.19 check + audit + pack dry-run + package smoke
 ```
 
 ## Design

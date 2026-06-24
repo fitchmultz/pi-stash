@@ -7,7 +7,7 @@
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { DynamicBorder, rawKeyHint } from "@earendil-works/pi-coding-agent";
+import { DynamicBorder, keyHint, rawKeyHint } from "@earendil-works/pi-coding-agent";
 import { Container, Key, matchesKey, type SelectItem, SelectList, Text } from "@earendil-works/pi-tui";
 import {
 	clampSelectedIndex,
@@ -60,7 +60,7 @@ function formatStatusText(ctx: ExtensionContext, text: string): string {
 }
 
 function supportsCustomPicker(ctx: ExtensionContext): boolean {
-	return ctx.mode !== "rpc" && ctx.mode !== "json" && ctx.mode !== "print";
+	return ctx.mode === "tui";
 }
 
 function requiresReplaceConfirmation(ctx: ExtensionContext): boolean {
@@ -202,10 +202,10 @@ async function showDraftPicker(
 					"dim",
 					[
 						rawKeyHint("up/down", "navigate"),
-						rawKeyHint("enter", "restore"),
+						keyHint("tui.select.confirm", "restore"),
 						rawKeyHint("ctrl+d", "delete"),
 						rawKeyHint("ctrl+x", "clear all"),
-						rawKeyHint("esc", "cancel"),
+						keyHint("tui.select.cancel", "cancel"),
 					].join(" • "),
 				),
 			),
