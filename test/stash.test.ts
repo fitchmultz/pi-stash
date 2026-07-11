@@ -9,6 +9,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { initTheme } from "@earendil-works/pi-coding-agent";
 import piStash from "../extensions/stash.ts";
 import { STASH_ENTRY_TYPE, type PersistedEntry } from "../extensions/state.ts";
 
@@ -32,6 +33,10 @@ interface TestTheme {
 	bold?(value: string): string;
 }
 
+interface TestDialogOptions {
+	signal?: AbortSignal;
+}
+
 interface TestUI {
 	theme?: TestTheme;
 	notify(message: string, type: string): void;
@@ -39,7 +44,7 @@ interface TestUI {
 	getEditorText(): string;
 	setEditorText(text: string): void;
 	pasteToEditor(text: string): void;
-	confirm(title: string, message?: string): Promise<boolean>;
+	confirm(title: string, message: string, options?: TestDialogOptions): Promise<boolean>;
 	custom<T>(
 		renderer: (tui: unknown, theme: unknown, keybindings: unknown, done: (value: T) => void) => unknown,
 	): Promise<T | undefined>;
@@ -99,7 +104,9 @@ function createContext(options: {
 	editorText?: string;
 	theme?: TestTheme;
 	customResult?: unknown;
+	custom?: TestUI["custom"];
 	confirmResult?: boolean;
+	confirm?: (title: string, message: string, options?: TestDialogOptions) => Promise<boolean>;
 	hasUI?: boolean;
 	mode?: "tui" | "rpc" | "json" | "print";
 	omitMode?: boolean;
@@ -134,11 +141,11 @@ function createContext(options: {
 			pasteToEditor(text) {
 				editorText += text;
 			},
-			async confirm() {
-				return confirmResult;
+			async confirm(title, message, dialogOptions) {
+				return options.confirm?.(title, message, dialogOptions) ?? confirmResult;
 			},
-			async custom<T>() {
-				return customResult as T | undefined;
+			async custom<T>(renderer: Parameters<TestUI["custom"]>[0]) {
+				return options.custom ? options.custom<T>(renderer as never) : (customResult as T | undefined);
 			},
 		},
 		sessionManager: {
@@ -309,6 +316,188 @@ test("RPC-like stash-list falls back to a textual summary when the custom picker
 		),
 		true,
 	);
+});
+
+test("state mutations remain serialized while a picker is pending", async () => {
+	const harness = createHarness();
+	let pickerOpened!: () => void;
+	let resolvePicker!: (result: unknown) => void;
+	const opened = new Promise<void>((resolve) => {
+		pickerOpened = resolve;
+	});
+	const pickerResult = new Promise<unknown>((resolve) => {
+		resolvePicker = resolve;
+	});
+	const context = createContext({
+		branchEntries: [stashSnapshot("latest", "older")],
+		mode: "tui",
+		theme: { fg: (_name, value) => value, bold: (value) => value },
+		custom: async <T>(_renderer: Parameters<TestUI["custom"]>[0]) => {
+			pickerOpened();
+			return (await pickerResult) as T;
+		},
+	});
+
+	await harness.events.get("session_start")?.({}, context.ctx);
+	const picker = harness.commands.get("stash-list")?.handler("", context.ctx);
+	await opened;
+	const queuedStash = harness.commands.get("stash")?.handler("queued", context.ctx);
+	assert.equal(harness.appended.length, 0);
+
+	resolvePicker({ action: "cancel" });
+	await Promise.all([picker, queuedStash]);
+	assert.deepEqual(harness.appended.at(-1), {
+		type: STASH_ENTRY_TYPE,
+		data: { drafts: ["queued", "latest", "older"] },
+	});
+});
+
+test("session shutdown closes a rendered picker, clears status, and invalidates queued mutations", async () => {
+	initTheme();
+	const harness = createHarness();
+	let pickerOpened!: () => void;
+	let pickerDoneValue: unknown;
+	const opened = new Promise<void>((resolve) => {
+		pickerOpened = resolve;
+	});
+	const context = createContext({
+		branchEntries: [stashSnapshot("latest", "older")],
+		mode: "tui",
+		theme: { fg: (_name, value) => value, bold: (value) => value },
+		custom: <T>(renderer: Parameters<TestUI["custom"]>[0]) =>
+			new Promise<T | undefined>((resolve) => {
+				renderer(
+					{ requestRender() {} },
+					{ fg: (_name: string, value: string) => value, bold: (value: string) => value },
+					{},
+					(value) => {
+						pickerDoneValue = value;
+						resolve(value as T);
+					},
+				);
+				pickerOpened();
+			}),
+	});
+
+	await harness.events.get("session_start")?.({}, context.ctx);
+	const picker = harness.commands.get("stash-list")?.handler("", context.ctx);
+	await opened;
+	const queuedStash = harness.commands.get("stash")?.handler("must not survive shutdown", context.ctx);
+
+	await harness.events.get("session_shutdown")?.({}, context.ctx);
+	await Promise.all([picker, queuedStash]);
+
+	assert.deepEqual(pickerDoneValue, { action: "cancel" });
+	assert.deepEqual(context.statuses.at(-1), { key: "pi-stash", text: undefined });
+	assert.equal(harness.appended.length, 0);
+
+	context.setBranchEntries([]);
+	await harness.events.get("session_start")?.({}, context.ctx);
+	await harness.commands.get("stash")?.handler("fresh after replacement", context.ctx);
+	assert.deepEqual(harness.appended.at(-1), {
+		type: STASH_ENTRY_TYPE,
+		data: { drafts: ["fresh after replacement"] },
+	});
+});
+
+test("session replacement aborts and dismisses a pending TUI confirmation without stale state", async () => {
+	const harness = createHarness();
+	let confirmationOpened!: () => void;
+	let confirmationSignal: AbortSignal | undefined;
+	let dismissed = false;
+	const opened = new Promise<void>((resolve) => {
+		confirmationOpened = resolve;
+	});
+	const context = createContext({
+		branchEntries: [stashSnapshot("latest", "older")],
+		mode: "tui",
+		theme: { fg: (_name, value) => value, bold: (value) => value },
+		customResult: { action: "clear" },
+		confirm: (_title, _message, options) => {
+			confirmationSignal = options?.signal;
+			assert.ok(confirmationSignal);
+			confirmationOpened();
+			return new Promise<boolean>((resolve) => {
+				confirmationSignal?.addEventListener(
+					"abort",
+					() => {
+						dismissed = true;
+						resolve(true);
+					},
+					{ once: true },
+				);
+			});
+		},
+	});
+
+	await harness.events.get("session_start")?.({}, context.ctx);
+	const pendingList = harness.commands.get("stash-list")?.handler("", context.ctx);
+	await opened;
+	assert.equal(confirmationSignal?.aborted, false);
+
+	context.setBranchEntries([stashSnapshot("replacement")]);
+	await harness.events.get("session_start")?.({}, context.ctx);
+	await pendingList;
+
+	assert.equal(confirmationSignal?.aborted, true);
+	assert.equal(dismissed, true);
+	assert.equal(harness.appended.length, 0);
+	assert.equal(context.notifications.some((entry) => entry.message === "Cleared stashed drafts"), false);
+	await harness.commands.get("stash")?.handler("fresh", context.ctx);
+	assert.deepEqual(harness.appended.at(-1), {
+		type: STASH_ENTRY_TYPE,
+		data: { drafts: ["fresh", "replacement"] },
+	});
+});
+
+test("session tree and shutdown invalidate pending RPC restore confirmations without stale effects", async () => {
+	for (const eventName of ["session_tree", "session_shutdown"] as const) {
+		const harness = createHarness();
+		let confirmationOpened!: () => void;
+		let confirmationSignal: AbortSignal | undefined;
+		let abortObserved = false;
+		const opened = new Promise<void>((resolve) => {
+			confirmationOpened = resolve;
+		});
+		const context = createContext({
+			branchEntries: [stashSnapshot("latest")],
+			mode: "rpc",
+			confirm: (_title, _message, options) => {
+				confirmationSignal = options?.signal;
+				assert.ok(confirmationSignal);
+				confirmationOpened();
+				return new Promise<boolean>((resolve) => {
+					confirmationSignal?.addEventListener(
+						"abort",
+						() => {
+							abortObserved = true;
+							resolve(eventName === "session_shutdown");
+						},
+						{ once: true },
+					);
+				});
+			},
+		});
+
+		await harness.events.get("session_start")?.({}, context.ctx);
+		const pendingRestore = harness.shortcuts.get("ctrl+shift+r")?.handler(context.ctx);
+		await opened;
+		assert.equal(confirmationSignal?.aborted, false, eventName);
+
+		context.setBranchEntries([stashSnapshot("replacement")]);
+		await harness.events.get(eventName)?.({}, context.ctx);
+		await pendingRestore;
+
+		assert.equal(confirmationSignal?.aborted, true, eventName);
+		assert.equal(abortObserved, true, eventName);
+		assert.equal(context.editorText, "", eventName);
+		assert.equal(harness.appended.length, 0, eventName);
+		assert.equal(
+			context.notifications.some((entry) => entry.message === "Restore cancelled"),
+			false,
+			eventName,
+		);
+	}
 });
 
 test("/stash ignores whitespace-only explicit text", async () => {

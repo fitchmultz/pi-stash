@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+- updated the local Pi development baseline to `@earendil-works/pi-coding-agent` / `@earendil-works/pi-tui` `0.80.6` and refreshed the npm lockfile
+- serialized stash mutations so overlapping commands and picker actions cannot overwrite newer state
+- dismiss pending TUI confirmation dialogs and pickers before resetting in-memory stash state and footer status during session tree changes, shutdown, or replacement; RPC confirmations are invalidated server-side because Pi `0.80.6` emits no client cancellation frame
+- refreshed README compatibility and lifecycle notes for Pi `0.80.6`
+
+### Tests
+- added regression coverage for serialized picker mutations, TUI dismissal, and server-side RPC confirmation invalidation during session tree changes, shutdown, and replacement
+
 ## [0.1.21] - 2026-06-24
 
 ### Changed
