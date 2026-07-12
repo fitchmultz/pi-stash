@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.1.22] - 2026-07-11
+
 ### Changed
 - updated the local Pi development baseline to `@earendil-works/pi-coding-agent` / `@earendil-works/pi-tui` `0.80.6` and refreshed the npm lockfile
 - serialized stash mutations so overlapping commands and picker actions cannot overwrite newer state
