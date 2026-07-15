@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+- refreshed the local Pi development lock and documented/tested compatibility baseline to Pi `0.80.7`; RPC confirmations still require server-side invalidation because Pi emits no client cancellation frame
+
 ## [0.1.22] - 2026-07-11
 
 ### Changed
