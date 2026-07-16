@@ -2,7 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## [0.1.24] - 2026-07-16
+
+### Changed
+- refreshed the local Pi development lock and documented/tested compatibility baseline to Pi `0.80.9`; wildcard runtime peers and server-side RPC confirmation invalidation remain unchanged
 
 ## [0.1.23] - 2026-07-14
 
