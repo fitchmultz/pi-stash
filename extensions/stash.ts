@@ -3,7 +3,7 @@
  * Responsibilities: Capture editor drafts, restore them later, persist stash state, and expose shortcuts and picker-based stash management.
  * Scope: Interactive editor draft management for a single pi session.
  * Usage: Install as a pi package, then use Ctrl+Shift+S to stash and Ctrl+Shift+R to restore or pick from multiple drafts.
- * Invariants/Assumptions: Drafts are restored newest-first by default, blank drafts are never stashed, and degraded clients fall back to confirmation or summary flows instead of crashing.
+ * Invariants/Assumptions: Drafts are restored newest-first by default, blank drafts are never stashed, and non-TUI clients use confirmation or summary flows.
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -93,15 +93,6 @@ function createInteraction(): Interaction {
 	};
 }
 
-function getThemeForeground(ctx: ExtensionContext): ((name: string, value: string) => string) | undefined {
-	const theme = ctx.ui.theme as { fg?: (name: string, value: string) => string } | undefined;
-	return typeof theme?.fg === "function" ? theme.fg.bind(theme) : undefined;
-}
-
-function formatStatusText(ctx: ExtensionContext, text: string): string {
-	return getThemeForeground(ctx)?.("accent", text) ?? text;
-}
-
 function supportsCustomPicker(ctx: ExtensionContext): boolean {
 	return ctx.mode === "tui";
 }
@@ -116,7 +107,7 @@ function updateStatus(ctx: ExtensionContext, drafts: readonly string[]): void {
 		return;
 	}
 
-	ctx.ui.setStatus("pi-stash", formatStatusText(ctx, `📦 ${countLabel(drafts.length)}`));
+	ctx.ui.setStatus("pi-stash", ctx.ui.theme.fg("accent", `📦 ${countLabel(drafts.length)}`));
 }
 
 function persistState(pi: ExtensionAPI, drafts: readonly string[]): void {

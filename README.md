@@ -4,7 +4,7 @@
 
 ## Requirements
 
-- `pi` running on Node.js `>=22.19.0`; Pi `0.80.9` or newer is the current tested baseline
+- Pi `0.84.0` or later, running on Node.js `>=22.19.0`
 - npm for local validation and publishing
 
 ## Install
@@ -30,7 +30,7 @@ pi install .
 
 Then run `/reload` inside `pi`.
 
-Compatibility note: this package is tested against the current pi release during each package update, and pi-bundled runtime packages are declared as optional wildcard peers. Pi `0.80.9` is the current tested floor, not a hard npm peer requirement. That keeps installs forward-open for future pi releases: npm peer ranges should not block users from trying a newer pi, though runtime behavior is only verified against the tested baseline until a follow-up package release confirms it.
+Pi `0.84.0` or later is required. Pi-bundled runtime packages remain optional wildcard peers as required by Pi package loading; exact `0.84.0` development dependencies define this package's validation floor.
 
 ## Development and validation
 
@@ -53,7 +53,7 @@ npm run validate      # ci + Node 22.19 check + audit + pack dry-run + package s
 - Drafts are kept as a small LIFO stack, so repeated stashes still work naturally.
 - The current stash stack is persisted in session metadata, so `/reload`, session resume, and `/tree` branch navigation keep drafts aligned with the active branch.
 - Overlapping stash, restore, and picker actions are serialized so a confirmation or picker cannot race another draft mutation.
-- Session tree changes, shutdown, or replacement dismiss pending TUI confirmation dialogs and pickers before resetting the extension's in-memory state and footer status. RPC confirmations are invalidated server-side; Pi `0.80.9` does not emit a client cancellation frame to dismiss the remote dialog.
+- Session tree changes, shutdown, or replacement dismiss pending TUI confirmation dialogs and pickers before resetting the extension's in-memory state and footer status. RPC confirmations are invalidated server-side; Pi `0.84.0` does not emit a separate client cancellation frame to dismiss the remote dialog.
 - A footer status shows how many drafts are currently stashed.
 
 ## Commands
