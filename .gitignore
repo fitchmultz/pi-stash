@@ -1,7 +1,6 @@
 node_modules/
 .pi/
 .tmp/
-.dogfood/
 .DS_Store
 npm-debug.log*
 

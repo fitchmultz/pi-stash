@@ -201,7 +201,6 @@ test("stash state rehydrates from the current branch on session start and tree n
 	const context = createContext({
 		branchEntries: [stashSnapshot("branch draft")],
 		allEntries: [stashSnapshot("branch draft"), stashSnapshot("other-branch newest")],
-		theme: { fg: (_name, value) => value, bold: (value) => value },
 	});
 
 	await harness.events.get("session_start")?.({}, context.ctx);

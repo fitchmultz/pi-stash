@@ -5,15 +5,9 @@
 ## Requirements
 
 - Pi `0.84.0` or later, running on Node.js `>=22.19.0`
-- npm for local validation and publishing
+- npm for local validation
 
 ## Install
-
-From npm:
-
-```bash
-pi install npm:@fitchmultz/pi-stash
-```
 
 From GitHub:
 
