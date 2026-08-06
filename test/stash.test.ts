@@ -29,8 +29,8 @@ interface StatusUpdate {
 }
 
 interface TestTheme {
-	fg?(name: string, value: string): string;
-	bold?(value: string): string;
+	fg(name: string, value: string): string;
+	bold(value: string): string;
 }
 
 interface TestDialogOptions {
@@ -38,7 +38,7 @@ interface TestDialogOptions {
 }
 
 interface TestUI {
-	theme?: TestTheme;
+	theme: TestTheme;
 	notify(message: string, type: string): void;
 	setStatus(key: string, text: string | undefined): void;
 	getEditorText(): string;
@@ -51,7 +51,7 @@ interface TestUI {
 }
 
 interface TestContext {
-	mode?: "tui" | "rpc" | "json" | "print";
+	mode: "tui" | "rpc" | "json" | "print";
 	hasUI: boolean;
 	ui: TestUI;
 	sessionManager: {
@@ -109,7 +109,6 @@ function createContext(options: {
 	confirm?: (title: string, message: string, options?: TestDialogOptions) => Promise<boolean>;
 	hasUI?: boolean;
 	mode?: "tui" | "rpc" | "json" | "print";
-	omitMode?: boolean;
 }) {
 	const notifications: Notification[] = [];
 	const statuses: StatusUpdate[] = [];
@@ -120,12 +119,10 @@ function createContext(options: {
 	const confirmResult = options.confirmResult ?? true;
 
 	const ctx: TestContext = {
-		...(options.omitMode
-			? {}
-			: { mode: options.mode ?? (options.hasUI === false ? "print" : options.theme ? "tui" : "rpc") }),
+		mode: options.mode ?? (options.hasUI === false ? "print" : options.theme ? "tui" : "rpc"),
 		hasUI: options.hasUI ?? true,
 		ui: {
-			theme: options.theme,
+			theme: options.theme ?? { fg: (_name, value) => value, bold: (value) => value },
 			notify(message, type) {
 				notifications.push({ message, type });
 			},
@@ -182,12 +179,11 @@ function stashSnapshot(...drafts: string[]): PersistedEntry {
 	};
 }
 
-test("/stash preserves explicit whitespace exactly and falls back to plain status text when theme styling is unavailable", async () => {
+test("/stash preserves explicit whitespace exactly", async () => {
 	const harness = createHarness();
 	const context = createContext({
 		branchEntries: [],
 		allEntries: [stashSnapshot("ignored global draft")],
-		theme: undefined,
 	});
 
 	await harness.events.get("session_start")?.({}, context.ctx);
@@ -205,7 +201,6 @@ test("stash state rehydrates from the current branch on session start and tree n
 	const context = createContext({
 		branchEntries: [stashSnapshot("branch draft")],
 		allEntries: [stashSnapshot("branch draft"), stashSnapshot("other-branch newest")],
-		theme: { fg: (_name, value) => value },
 	});
 
 	await harness.events.get("session_start")?.({}, context.ctx);
@@ -223,26 +218,6 @@ test("stash state rehydrates from the current branch on session start and tree n
 	assert.deepEqual(harness.appended.at(-1), {
 		type: STASH_ENTRY_TYPE,
 		data: { drafts: ["after tree", "tree branch draft"] },
-	});
-});
-
-test("legacy interactive restore without ctx.mode still appends without replace confirmation", async () => {
-	const harness = createHarness();
-	const context = createContext({
-		branchEntries: [],
-		allEntries: [],
-		confirmResult: false,
-		editorText: "host draft",
-		omitMode: true,
-	});
-
-	await harness.commands.get("stash")?.handler("latest", context.ctx);
-	await harness.shortcuts.get("ctrl+shift+r")?.handler(context.ctx);
-
-	assert.equal(context.editorText, "host draftlatest");
-	assert.deepEqual(harness.appended.at(-1), {
-		type: STASH_ENTRY_TYPE,
-		data: { drafts: [] },
 	});
 });
 

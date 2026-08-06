@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2026-08-06
+
+### Changed
+- raised the minimum supported Pi version to `0.84.0` and pinned direct Pi development dependencies to the exact `0.84.0` release
+- removed the pre-0.84 missing-theme and missing-`ctx.mode` compatibility paths; status rendering and mode handling now use the required Pi `0.84.0` extension context
+- refreshed package metadata, documentation, tests, and the npm lockfile for the Pi `0.84.0` contract while retaining optional wildcard Pi runtime peers per package guidance
+
+### Validation
+- passed type checking, the full Node test matrix, production audit, package dry run, and isolated Pi `0.84.0` package-load smoke
+- verified real install, fullscreen TUI stash/picker/restore shortcuts, and reload persistence with an isolated Pi `0.84.0` executable inside tmux
+
 ## [0.1.24] - 2026-07-16
 
 ### Changed
