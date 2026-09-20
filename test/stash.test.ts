@@ -71,7 +71,7 @@ interface RegisteredShortcut {
 }
 
 interface RegisteredEvent {
-	(event: unknown, ctx: TestContext): Promise<void>;
+	(event: unknown, ctx: TestContext): unknown;
 }
 
 function createHarness() {
@@ -473,6 +473,43 @@ test("session tree and shutdown invalidate pending RPC restore confirmations wit
 			eventName,
 		);
 	}
+});
+
+test("checkpoint qualifies existing branch state without mutating it", async () => {
+	const harness = createHarness();
+	const context = createContext({ branchEntries: [stashSnapshot("saved")], editorText: "native-owned draft" });
+	await harness.events.get("session_start")?.({}, context.ctx);
+	const checkpoint = harness.events.get("session_checkpoint");
+	assert.ok(checkpoint);
+	assert.deepEqual(await checkpoint({}, context.ctx), { sleepReady: true });
+	assert.equal(context.editorText, "native-owned draft", "native host, not stash, guards editor drafts");
+	assert.equal(harness.appended.length, 0, "checkpoint does not rewrite or auto-stash");
+	context.setBranchEntries([]);
+	assert.deepEqual(await checkpoint({}, context.ctx), {
+		sleepReady: false, reason: "Stash state differs from the selected branch",
+	});
+});
+
+test("checkpoint refuses a live picker without cancelling it", async () => {
+	const harness = createHarness();
+	let opened!: () => void;
+	let finish!: (value: unknown) => void;
+	const waiting = new Promise<void>((resolve) => { opened = resolve; });
+	const result = new Promise<unknown>((resolve) => { finish = resolve; });
+	const context = createContext({
+		branchEntries: [stashSnapshot("saved")], mode: "tui",
+		custom: async <T>() => { opened(); return (await result) as T; },
+	});
+	await harness.events.get("session_start")?.({}, context.ctx);
+	const command = harness.commands.get("stash-list")!.handler("", context.ctx);
+	await waiting;
+	assert.deepEqual(await harness.events.get("session_checkpoint")!({}, context.ctx), {
+		sleepReady: false, reason: "Stash interaction is still live",
+	});
+	assert.equal(harness.appended.length, 0);
+	finish({ action: "cancel" });
+	await command;
+	assert.deepEqual(await harness.events.get("session_checkpoint")!({}, context.ctx), { sleepReady: true });
 });
 
 test("/stash ignores whitespace-only explicit text", async () => {

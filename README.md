@@ -49,6 +49,7 @@ npm run validate      # ci + Node 22.19 check + audit + pack dry-run + package s
 - Overlapping stash, restore, and picker actions are serialized so a confirmation or picker cannot race another draft mutation.
 - Session tree changes, shutdown, or replacement dismiss pending TUI confirmation dialogs and pickers before resetting the extension's in-memory state and footer status. RPC confirmations are invalidated server-side; Pi `0.84.0` does not emit a separate client cancellation frame to dismiss the remote dialog.
 - A footer status shows how many drafts are currently stashed.
+- On Pi forks supporting `session_checkpoint`, idle stashes qualify through their existing selected-branch entries. Live pickers/confirmations, queued operations, and editor drafts must finish through native ownership; checkpointing never stashes, discards, or cancels user work. Shutdown cleanup remains unchanged. Older Pi hosts ignore the additive hook.
 
 ## Commands
 

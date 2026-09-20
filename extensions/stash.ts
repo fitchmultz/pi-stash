@@ -418,6 +418,20 @@ export default function piStash(pi: ExtensionAPI): void {
 		reset(ctx, []);
 	});
 
+	// Additive fork event; older Pi hosts simply never dispatch it. Keep stock API typing elsewhere.
+	(pi.on as unknown as (event: "session_checkpoint", handler: (
+		event: unknown, ctx: ExtensionContext,
+	) => { sleepReady: boolean; reason?: string }) => void)("session_checkpoint", (_event, ctx) => {
+		// Commands/shortcuts return pendingOperation to Pi: native ingress owns and joins that chain.
+		// Never cancel a picker, stash editor text, or run shutdown just to make a checkpoint pass.
+		if (pendingInteraction) return { sleepReady: false, reason: "Stash interaction is still live" };
+		const saved = hydrateState(ctx.sessionManager.getBranch()).drafts;
+		if (saved.length !== drafts.length || saved.some((draft, index) => draft !== drafts[index])) {
+			return { sleepReady: false, reason: "Stash state differs from the selected branch" };
+		}
+		return { sleepReady: true };
+	});
+
 	pi.registerShortcut("ctrl+shift+s", {
 		description: "Stash the current draft and clear the editor",
 		handler: (ctx) =>
