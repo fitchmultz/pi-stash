@@ -22,20 +22,23 @@ npm install
 pi install .
 ```
 
-Then run `/reload` inside `pi`.
+Restart Pi after installing or updating extension code or dependencies. The maintained fork's `/reload` refreshes resources and reinitializes cached extension code; it is not code-update activation.
 
-Pi `0.84.0` or later is required. Pi-bundled runtime packages remain optional wildcard peers as required by Pi package loading; exact `0.84.0` development dependencies define this package's validation floor.
+Pi `0.84.0` remains the declared floor. Pi-bundled runtime packages remain optional wildcard peers as required by Pi package loading; exact official `0.86.1` development dependencies define the current qualification baseline, not a promise that every intermediate release was tested.
 
 ## Development and validation
 
 `pi` loads the extension from the source `.ts` files, but local tests are transpiled into `.tmp/test-dist/` before Node runs them so validation works on the declared Node 22.19 floor.
 
 ```bash
+npm run check:compat  # typecheck + transpiled tests + pack dry-run + native install/load smoke
 npm run ci            # typecheck + transpiled tests
 npm run test:node22   # explicit Node 22.19 compatibility check
 npm run smoke:package # isolated pi install/load smoke
 npm run validate      # ci + Node 22.19 check + audit + pack dry-run + package smoke
 ```
+
+The smoke test resolves the installed host's actual `bin.pi` entry (or `PI_HOST_CLI` in qualification) and uses an isolated HOME/agentDir. `PI_COMPAT_EXPECTED_VERSION` and `PI_COMPAT_EXPECTED_PACKAGE_DIR` assert the selected host. The standalone `PI_BIN` override remains available outside compatibility jobs. No production build or `prepare` is needed; Pi loads the shipped TypeScript directly.
 
 ## Design
 
