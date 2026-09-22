@@ -1,8 +1,6 @@
 name: Pi compatibility
 
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -10,11 +8,80 @@ permissions:
   contents: read
 
 concurrency:
-  group: pi-compatibility-${{ github.workflow }}-${{ github.ref }}
+  group: pi-compatibility-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   compatibility:
-    uses: fitchmultz/.github/.github/workflows/pi-compatibility.yml@fe049ea97a8c91d1a4c3a0958a85b37c7759dcc6 # v1.0.0
-    with:
-      automation-ref: fe049ea97a8c91d1a4c3a0958a85b37c7759dcc6 # v1.0.0
+    name: compatibility / compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    env:
+      PI_OFFLINE: "1"
+      PI_TELEMETRY: "0"
+      PI_AUTOMATION_REF: fe049ea97a8c91d1a4c3a0958a85b37c7759dcc6 # v1.0.0
+      npm_config_cache: ${{ github.workspace }}/.npm-cache
+      npm_config_audit: "false"
+      npm_config_fund: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: extension
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: fitchmultz/.github
+          ref: ${{ env.PI_AUTOMATION_REF }}
+          path: automation
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: fitchmultz/pi
+          ref: main
+          path: fork
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Build the maintained fork
+        shell: bash
+        run: |
+          npm install --global "$(node -p 'require("./automation/package.json").packageManager')"
+          npm --prefix fork ci --ignore-scripts
+          npm --prefix fork run hydrate:model-data
+          git -C fork diff --exit-code
+          npm --prefix fork run build:offline
+          git -C fork diff --exit-code
+          fork_ref=$(git -C fork rev-parse HEAD)
+          node automation/scripts/pack-fork.mjs fork "$RUNNER_TEMP/fork-package" "$fork_ref"
+          echo "PI_COMPAT_FORK_REF=$fork_ref" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.19.0"
+          package-manager-cache: false
+      - name: Qualify official Pi and the fork
+        shell: bash
+        run: |
+          npm install --global "$(node -p 'require("./automation/package.json").packageManager')"
+          official=$(node -p 'require("./extension/package.json").devDependencies["@earendil-works/pi-coding-agent"]')
+          node automation/scripts/qualify.mjs --repo pi-stash --source "$GITHUB_WORKSPACE/extension" --host official --target "$official" --output "$RUNNER_TEMP/official-evidence"
+          node automation/scripts/qualify.mjs --repo pi-stash --source "$GITHUB_WORKSPACE/extension" --host fork --target "$RUNNER_TEMP/fork-package" --output "$RUNNER_TEMP/fork-evidence"
+
+  node26:
+    name: Node 26
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      PI_OFFLINE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "26"
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm test
+      - run: npm run smoke:package
