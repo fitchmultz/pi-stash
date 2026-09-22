@@ -24,7 +24,7 @@ pi install .
 
 Restart Pi after installing or updating extension code or dependencies. The maintained fork's `/reload` refreshes resources and reinitializes cached extension code; it is not code-update activation.
 
-Pi `0.84.0` remains the declared floor. Pi-bundled runtime packages remain optional wildcard peers as required by Pi package loading; exact official `0.86.1` development dependencies define the current qualification baseline, not a promise that every intermediate release was tested.
+Pi `0.84.0` remains the declared floor. Pi-bundled runtime packages remain optional wildcard peers as required by Pi package loading; exact official `0.87.0` development dependencies define the current qualification baseline, not a promise that every intermediate release was tested.
 
 ## Development and validation
 
