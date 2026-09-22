@@ -57,12 +57,27 @@ try {
 			"--no-context-files",
 			"--no-builtin-tools",
 		],
-		`${JSON.stringify({ type: "get_commands" })}\n`,
+		[
+			{ id: "stash", type: "prompt", message: "/stash ci-draft" },
+			{ id: "list", type: "prompt", message: "/stash-list" },
+		].map((command) => JSON.stringify(command)).join("\n") + "\n",
 	);
-
-	if (!stdout.includes('"name":"stash"') || !stdout.includes('"name":"stash-list"')) {
-		throw new Error(`pi-stash commands were not loaded\nstdout:\n${stdout}`);
-	}
+	const events = stdout.trim().split("\n").map((line) => JSON.parse(line));
+	assert.ok(events.some((event) =>
+		event.type === "entry_appended" &&
+		event.entry?.customType === "pi-stash" &&
+		event.entry.data?.drafts?.[0] === "ci-draft"
+	), stdout);
+	assert.ok(events.some((event) =>
+		event.type === "extension_ui_request" &&
+		event.method === "notify" &&
+		event.message?.includes("1. ci-draft")
+	), stdout);
+	assert.deepEqual(
+		events.filter((event) => event.type === "response").map((event) => [event.id, event.success]),
+		[["stash", true], ["list", true]],
+	);
+	assert.ok(!events.some((event) => event.type === "agent_start" || event.type === "extension_error"), stdout);
 } finally {
 	rmSync(home, { recursive: true, force: true });
 }

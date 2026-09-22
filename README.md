@@ -38,7 +38,7 @@ npm run smoke:package # isolated pi install/load smoke
 npm run validate      # ci + Node 22.19 check + audit + pack dry-run + package smoke
 ```
 
-The smoke test resolves the installed host's actual `bin.pi` entry (or `PI_HOST_CLI` in qualification) and uses an isolated HOME/agentDir. `PI_COMPAT_EXPECTED_VERSION` and `PI_COMPAT_EXPECTED_PACKAGE_DIR` assert the selected host. The standalone `PI_BIN` override remains available outside compatibility jobs. No production build or `prepare` is needed; Pi loads the shipped TypeScript directly.
+The smoke test resolves the installed host's actual `bin.pi` entry (or `PI_HOST_CLI` in qualification) and uses an isolated HOME/agentDir. `PI_COMPAT_EXPECTED_VERSION` and `PI_COMPAT_EXPECTED_PACKAGE_DIR` assert the selected host. The standalone `PI_BIN` override remains available outside compatibility jobs. GitHub PR checks qualify the declared official Pi version and the maintained fork on Node 22.19; Node 26 is an advisory check. They exercise stash and list through the real CLI, but do not trigger a native checkpoint or test Windows. No production build or `prepare` is needed for this package; Pi loads the shipped TypeScript directly.
 
 ## Design
 
