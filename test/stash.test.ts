@@ -408,6 +408,36 @@ test("clearing the unsaved original keeps an opened recovery separate", async (t
 	}
 });
 
+test("saving one session does not delete another session's recovery", async (t) => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-recovery-ownership-"));
+	try {
+		const sessionDir = join(cwd, "sessions");
+		const other = SessionManager.open(join(sessionDir, "foo-bar.jsonl"), sessionDir, cwd);
+		const otherHarness = createHarness((type, data) => other.appendCustomEntry(type, data));
+		const otherContext = createContext({ cwd, sessionManager: other, mode: "tui" });
+		await otherHarness.commands.get("stash")?.handler("other draft", otherContext.ctx);
+		if (existsSync(other.getSessionFile()!)) {
+			t.skip("this Pi host saves new sessions immediately");
+			return;
+		}
+		const otherRecovery = SessionManager.continueRecent(cwd, sessionDir).getSessionFile()!;
+
+		const first = SessionManager.open(join(sessionDir, "foo.jsonl"), sessionDir, cwd);
+		const firstHarness = createHarness((type, data) => first.appendCustomEntry(type, data));
+		const firstContext = createContext({ cwd, sessionManager: first, mode: "tui" });
+		await firstHarness.commands.get("stash")?.handler("first draft", firstContext.ctx);
+		const firstRecovery = SessionManager.continueRecent(cwd, sessionDir).getSessionFile()!;
+
+		appendAssistant(first);
+		await firstHarness.events.get("agent_end")?.({}, firstContext.ctx);
+		assert.equal(existsSync(firstRecovery), false);
+		assert.equal(existsSync(otherRecovery), true);
+		assert.deepEqual(hydrateState(SessionManager.open(otherRecovery).getBranch()).drafts, ["other draft"]);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
 test("leaving an unsaved stash branch does not delete its recovery", async (t) => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-unsaved-branch-"));
 	try {

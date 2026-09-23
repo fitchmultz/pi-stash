@@ -138,7 +138,15 @@ function removeUnusedRecoveries(ctx: ExtensionContext, drafts: readonly string[]
 		if (saved.length !== drafts.length || saved.some((draft, index) => draft !== drafts[index])) return;
 		for (const name of recoveries) {
 			const recovery = join(dir, name);
-			if (SessionManager.open(recovery).getEntries().length === 2) rmSync(recovery);
+			const entries = SessionManager.open(recovery).getEntries();
+			if (entries.length !== 2) continue;
+			const snapshot = entries[1];
+			const owner = snapshot.type === "custom" && snapshot.customType === STASH_ENTRY_TYPE
+				? (snapshot.data as { originSessionFile?: string } | undefined)?.originSessionFile
+				: undefined;
+			if (owner === sessionFile || (owner === undefined && name === `${parse(sessionFile).name}${RECOVERY_SUFFIX}`)) {
+				rmSync(recovery);
+			}
 		}
 	} catch {
 		// Keep recovery sessions if the original cannot be verified or cleaned up.
@@ -162,7 +170,7 @@ function persistState(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly 
 		writeFileSync(temporary, "", { flag: "wx", mode: 0o600 });
 		const saved = SessionManager.open(temporary, dir, ctx.cwd);
 		saved.appendSessionInfo("Stashed drafts");
-		saved.appendCustomEntry(STASH_ENTRY_TYPE, { drafts: [...drafts] });
+		saved.appendCustomEntry(STASH_ENTRY_TYPE, { drafts: [...drafts], originSessionFile: sessionFile });
 		renameSync(temporary, recovery);
 		// ponytail: Official Pi cannot claim a recovery before session_start. Keep older copies until its original session saves; retire this fallback when official Pi saves custom entries eagerly.
 		makeMostRecent(ctx, recovery);
