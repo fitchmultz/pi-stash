@@ -238,7 +238,7 @@ test("a fresh-session stash survives restarting before the first assistant reply
 
 		appendAssistant(manager);
 		await harness.events.get("agent_end")?.({}, context.ctx);
-		if (neededRecovery) assert.equal(existsSync(resumed.getSessionFile()!), false);
+		if (neededRecovery) assert.equal(existsSync(resumed.getSessionFile()!), true);
 		assert.deepEqual(hydrateState(SessionManager.open(originalFile).getBranch()).drafts, expected);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
@@ -307,16 +307,22 @@ test("stashing again does not overwrite an opened recovery session", async (t) =
 		assert.ok(statSync(latest.getSessionFile()!).mtimeMs > statSync(openedFile).mtimeMs);
 		assert.deepEqual(hydrateState(latest.getBranch()).drafts, ["second draft", "first draft"]);
 
+		const other = SessionManager.create(cwd, sessionDir);
+		appendAssistant(other);
+		const later = (statSync(openedFile).mtimeMs + 0.5) / 1000;
+		utimesSync(other.getSessionFile()!, later, later);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), other.getSessionFile());
+
 		appendAssistant(original);
 		await originalHarness.events.get("agent_end")?.({}, originalContext.ctx);
 		assert.equal(existsSync(openedFile), true);
-		assert.equal(existsSync(latest.getSessionFile()!), false);
+		assert.equal(existsSync(latest.getSessionFile()!), true);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}
 });
 
-test("a recovery loaded before another stash stays writable", async (t) => {
+test("a recovery loaded before the original saves stays writable", async (t) => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-opening-recovery-"));
 	try {
 		const sessionDir = join(cwd, "sessions");
@@ -332,6 +338,9 @@ test("a recovery loaded before another stash stays writable", async (t) => {
 		const opening = SessionManager.continueRecent(cwd, sessionDir);
 		const openingFile = opening.getSessionFile()!;
 		await originalHarness.commands.get("stash")?.handler("new original draft", originalContext.ctx);
+		assert.equal(existsSync(openingFile), true);
+		appendAssistant(original);
+		await originalHarness.events.get("agent_end")?.({}, originalContext.ctx);
 		assert.equal(existsSync(openingFile), true);
 		const openingHarness = createHarness((type, data) => opening.appendCustomEntry(type, data));
 		const openingContext = createContext({ cwd, sessionManager: opening, mode: "tui" });
@@ -461,6 +470,8 @@ test("a late recovery startup cannot undo an original clear", async (t) => {
 		appendAssistant(original);
 		await harness.events.get("agent_end")?.({}, context.ctx);
 		assert.deepEqual(hydrateState(SessionManager.open(original.getSessionFile()!).getBranch()).drafts, []);
+		assert.equal(existsSync(emptyRecovery!), true);
+		assert.deepEqual(hydrateState(SessionManager.continueRecent(cwd, sessionDir).getBranch()).drafts, []);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}
@@ -492,6 +503,15 @@ test("agent end does not overtake a later recovery edit", async (t) => {
 		assert.deepEqual(hydrateState(SessionManager.open(opened.getSessionFile()!).getBranch()).drafts, [
 			"later edit", "first draft",
 		]);
+
+		const future = new Date(Date.now() + 1_000);
+		utimesSync(opened.getSessionFile()!, future, future);
+		const other = SessionManager.create(cwd, sessionDir);
+		appendAssistant(other);
+		const otherHarness = createHarness((type, data) => other.appendCustomEntry(type, data));
+		const otherContext = createContext({ cwd, sessionManager: other, mode: "tui" });
+		await otherHarness.commands.get("stash")?.handler("newer session", otherContext.ctx);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), other.getSessionFile());
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}
@@ -519,7 +539,7 @@ test("saving one session does not delete another session's recovery", async (t) 
 
 		appendAssistant(first);
 		await firstHarness.events.get("agent_end")?.({}, firstContext.ctx);
-		assert.equal(existsSync(firstRecovery), false);
+		assert.equal(existsSync(firstRecovery), true);
 		assert.equal(existsSync(otherRecovery), true);
 		assert.deepEqual(hydrateState(SessionManager.open(otherRecovery).getBranch()).drafts, ["other draft"]);
 	} finally {

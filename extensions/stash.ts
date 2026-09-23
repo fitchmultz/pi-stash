@@ -56,7 +56,6 @@ type DraftPickerResult =
 
 const INTERACTION_CANCELLED = Symbol("interaction-cancelled");
 const RECOVERY_SUFFIX = "-pi-stash-recovery.jsonl";
-const RECOVERY_OPENED_TYPE = "pi-stash-recovery-opened";
 
 interface Interaction {
 	readonly cancelled: boolean;
@@ -121,38 +120,8 @@ function makeMostRecent(ctx: ExtensionContext, sessionFile: string): void {
 	const newest = readdirSync(dir)
 		.filter((name) => name.endsWith(".jsonl"))
 		.reduce((mtime, name) => Math.max(mtime, statSync(join(dir, name)).mtimeMs), Date.now());
-	utimesSync(sessionFile, new Date(), new Date(Math.ceil(newest) + 1));
-}
-
-function removeUnusedRecoveries(ctx: ExtensionContext, drafts: readonly string[]): boolean {
-	const sessionFile = ctx.sessionManager.getSessionFile();
-	if (!sessionFile || !existsSync(sessionFile)) return false;
-
-	try {
-		const dir = ctx.sessionManager.getSessionDir();
-		const prefix = `${parse(sessionFile).name}-`;
-		const recoveries = readdirSync(dir).filter((name) => name.startsWith(prefix) && name.endsWith(RECOVERY_SUFFIX));
-		if (recoveries.length === 0) return false;
-
-		const saved = hydrateState(SessionManager.open(sessionFile).getBranch()).drafts;
-		if (saved.length !== drafts.length || saved.some((draft, index) => draft !== drafts[index])) return false;
-		for (const name of recoveries) {
-			const recovery = join(dir, name);
-			const entries = SessionManager.open(recovery).getEntries();
-			if (entries.length !== 2) continue;
-			const snapshot = entries[1];
-			const owner = snapshot.type === "custom" && snapshot.customType === STASH_ENTRY_TYPE
-				? (snapshot.data as { originSessionFile?: string } | undefined)?.originSessionFile
-				: undefined;
-			if (owner === sessionFile || (owner === undefined && name === `${parse(sessionFile).name}${RECOVERY_SUFFIX}`)) {
-				rmSync(recovery);
-			}
-		}
-		return true;
-	} catch {
-		// Keep recovery sessions if the original cannot be verified or cleaned up.
-		return false;
-	}
+	// Ten microseconds breaks ties without the millisecond skew of a Date.
+	utimesSync(sessionFile, new Date(), (newest + 0.01) / 1000);
 }
 
 function persistState(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly string[]): void {
@@ -160,8 +129,7 @@ function persistState(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly 
 	const sessionFile = ctx.sessionManager.getSessionFile();
 	if (!sessionFile) return;
 	if (existsSync(sessionFile)) {
-		const hadRecoveries = removeUnusedRecoveries(ctx, drafts);
-		if (hadRecoveries || sessionFile.endsWith(RECOVERY_SUFFIX)) makeMostRecent(ctx, sessionFile);
+		makeMostRecent(ctx, sessionFile);
 		return;
 	}
 
@@ -172,9 +140,9 @@ function persistState(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly 
 		writeFileSync(temporary, "", { flag: "wx", mode: 0o600 });
 		const saved = SessionManager.open(temporary, dir, ctx.cwd);
 		saved.appendSessionInfo("Stashed drafts");
-		saved.appendCustomEntry(STASH_ENTRY_TYPE, { drafts: [...drafts], originSessionFile: sessionFile });
+		saved.appendCustomEntry(STASH_ENTRY_TYPE, { drafts: [...drafts] });
 		renameSync(temporary, recovery);
-		// ponytail: Official Pi cannot claim a recovery before session_start. Keep older copies until its original session saves; retire this fallback when official Pi saves custom entries eagerly.
+		// ponytail: Official Pi cannot tell whether another window loaded a recovery before session_start. Keep each copy until official Pi saves custom entries eagerly.
 		makeMostRecent(ctx, recovery);
 	} finally {
 		rmSync(temporary, { force: true });
@@ -476,17 +444,6 @@ export default function piStash(pi: ExtensionAPI): void {
 
 	pi.on("session_start", async (_event, ctx) => {
 		reset(ctx, hydrateState(ctx.sessionManager.getBranch()).drafts);
-		const sessionFile = ctx.sessionManager.getSessionFile();
-		if (sessionFile?.endsWith(RECOVERY_SUFFIX)) {
-			if (!ctx.sessionManager.getEntries().some((entry) => entry.type === "custom" && entry.customType === RECOVERY_OPENED_TYPE)) {
-				// Claim the recovery without making its older draft the most recent session.
-				const { atime, mtime } = statSync(sessionFile);
-				pi.appendEntry(RECOVERY_OPENED_TYPE);
-				utimesSync(sessionFile, atime, mtime);
-			}
-		} else {
-			removeUnusedRecoveries(ctx, drafts);
-		}
 	});
 
 	pi.on("session_tree", async (_event, ctx) => {
@@ -494,12 +451,7 @@ export default function piStash(pi: ExtensionAPI): void {
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
-		removeUnusedRecoveries(ctx, drafts);
 		reset(ctx, []);
-	});
-
-	pi.on("agent_end", async (_event, ctx) => {
-		removeUnusedRecoveries(ctx, drafts);
 	});
 
 	// Additive fork event; older Pi hosts simply never dispatch it. Keep stock API typing elsewhere.
