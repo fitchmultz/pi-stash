@@ -7,11 +7,11 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { existsSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, readdirSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { join, parse } from "node:path";
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { DynamicBorder, keyHint, rawKeyHint, SessionManager } from "@earendil-works/pi-coding-agent";
+import { buildSessionContext, DynamicBorder, keyHint, parseSessionEntries, rawKeyHint, SessionManager, sessionEntryToContextMessages } from "@earendil-works/pi-coding-agent";
 import { Container, Key, matchesKey, type SelectItem, SelectList, Text } from "@earendil-works/pi-tui";
 import {
 	clampSelectedIndex,
@@ -56,7 +56,7 @@ type DraftPickerResult =
 
 const INTERACTION_CANCELLED = Symbol("interaction-cancelled");
 const RECOVERY_SUFFIX = "-pi-stash-recovery.jsonl";
-const RECOVERY_OPENED_TYPE = "pi-stash-recovery-opened";
+const RECOVERY_ACTIVITY_SUFFIX = ".pi-stash-mtime";
 
 interface Interaction {
 	readonly cancelled: boolean;
@@ -116,50 +116,77 @@ function updateStatus(ctx: ExtensionContext, drafts: readonly string[]): void {
 	ctx.ui.setStatus("pi-stash", ctx.ui.theme.fg("accent", `📦 ${countLabel(drafts.length)}`));
 }
 
-function recoveryFile(ctx: ExtensionContext, sessionFile: string): string {
-	return join(ctx.sessionManager.getSessionDir(), `${parse(sessionFile).name}${RECOVERY_SUFFIX}`);
+function nextSessionMtime(ctx: ExtensionContext): number {
+	const dir = ctx.sessionManager.getSessionDir();
+	const newest = readdirSync(dir)
+		.filter((name) => name.endsWith(".jsonl"))
+		.reduce((mtime, name) => Math.max(mtime, statSync(join(dir, name)).mtime.getTime()), Date.now());
+	// Pi 0.84 compares Date mtimes; the extra microseconds survive Node 22's utimes rounding.
+	return newest + 1.01;
 }
 
-function removeSavedRecovery(ctx: ExtensionContext, drafts: readonly string[]): void {
-	const sessionFile = ctx.sessionManager.getSessionFile();
-	if (!sessionFile || !existsSync(sessionFile)) return;
-	const recovery = recoveryFile(ctx, sessionFile);
-	if (!existsSync(recovery)) return;
+function localRecoveryMtime(mtimeMs: unknown): number | undefined {
+	// An imported recovery's timestamp must not pin this machine's recent sessions far into the future.
+	return typeof mtimeMs === "number" && Number.isFinite(mtimeMs) && mtimeMs >= 0 &&
+		mtimeMs <= Date.now() + 5_000 ? mtimeMs : undefined;
+}
 
+function recoveryActivityMtime(file: string): number | undefined {
 	try {
-		const backup = SessionManager.open(recovery);
-		if (backup.getEntries().length !== 2) return;
-		const saved = hydrateState(SessionManager.open(sessionFile).getBranch()).drafts;
-		if (saved.length === drafts.length && saved.every((draft, index) => draft === drafts[index])) {
-			rmSync(recovery);
+		let latest: number | undefined;
+		for (const line of readFileSync(`${file}${RECOVERY_ACTIVITY_SUFFIX}`, "utf8").split("\n")) {
+			if (!line) continue;
+			const mtimeMs = localRecoveryMtime(Number(line));
+			if (mtimeMs !== undefined) latest = Math.max(latest ?? 0, mtimeMs);
 		}
+		return latest;
 	} catch {
-		// Keep the recovery session if the original cannot be verified or cleaned up.
+		return undefined;
 	}
+}
+
+function recordRecoveryActivity(file: string, mtimeMs: number): void {
+	if (mtimeMs <= (recoveryActivityMtime(file) ?? 0)) return;
+	try {
+		appendFileSync(`${file}${RECOVERY_ACTIVITY_SUFFIX}`, `${mtimeMs}\n`, { mode: 0o600 });
+	} catch {
+		// Recency metadata is best-effort; the stash remains in its session file.
+	}
+}
+
+function recordNativeRecoveryChange(ctx: ExtensionContext): void {
+	const file = ctx.sessionManager.getSessionFile();
+	if (!file?.endsWith(RECOVERY_SUFFIX) || !existsSync(file)) return;
+	const mtimeMs = Math.max(nextSessionMtime(ctx), (recoveryActivityMtime(file) ?? 0) + 1.01);
+	utimesSync(file, statSync(file).atime, mtimeMs / 1000);
+	recordRecoveryActivity(file, mtimeMs);
 }
 
 function persistState(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly string[]): void {
-	pi.appendEntry(STASH_ENTRY_TYPE, { drafts: [...drafts] });
 	const sessionFile = ctx.sessionManager.getSessionFile();
+	const recoveryMtimeMs = sessionFile?.endsWith(RECOVERY_SUFFIX) ? nextSessionMtime(ctx) : undefined;
+	pi.appendEntry(STASH_ENTRY_TYPE, {
+		drafts: [...drafts],
+		...(recoveryMtimeMs === undefined ? {} : { recoveryMtimeMs }),
+	});
 	if (!sessionFile) return;
 	if (existsSync(sessionFile)) {
-		removeSavedRecovery(ctx, drafts);
+		utimesSync(sessionFile, new Date(), (recoveryMtimeMs ?? nextSessionMtime(ctx)) / 1000);
 		return;
 	}
 
-	const recovery = recoveryFile(ctx, sessionFile);
-	if (drafts.length === 0) {
-		rmSync(recovery, { force: true });
-		return;
-	}
-
-	const temporary = `${recovery}.${randomUUID()}.tmp`;
+	const dir = ctx.sessionManager.getSessionDir();
+	const recovery = join(dir, `${parse(sessionFile).name}-${randomUUID()}${RECOVERY_SUFFIX}`);
+	const temporary = `${recovery}.tmp`;
 	try {
 		writeFileSync(temporary, "", { flag: "wx", mode: 0o600 });
-		const saved = SessionManager.open(temporary, ctx.sessionManager.getSessionDir(), ctx.cwd);
+		const saved = SessionManager.open(temporary, dir, ctx.cwd);
 		saved.appendSessionInfo("Stashed drafts");
-		saved.appendCustomEntry(STASH_ENTRY_TYPE, { drafts: [...drafts] });
+		const mtimeMs = nextSessionMtime(ctx);
+		saved.appendCustomEntry(STASH_ENTRY_TYPE, { drafts: [...drafts], recoveryMtimeMs: mtimeMs });
 		renameSync(temporary, recovery);
+		// ponytail: Official Pi cannot tell whether another window loaded a recovery before session_start. Keep each copy until official Pi saves custom entries eagerly.
+		utimesSync(recovery, new Date(), mtimeMs / 1000);
 	} finally {
 		rmSync(temporary, { force: true });
 	}
@@ -458,29 +485,84 @@ export default function piStash(pi: ExtensionAPI): void {
 		updateStatus(ctx, drafts);
 	};
 
-	pi.on("session_start", async (_event, ctx) => {
+	pi.on("session_start", async (event, ctx) => {
 		reset(ctx, hydrateState(ctx.sessionManager.getBranch()).drafts);
-		const sessionFile = ctx.sessionManager.getSessionFile();
-		if (sessionFile?.endsWith(RECOVERY_SUFFIX)) {
-			if (!ctx.sessionManager.getEntries().some((entry) => entry.type === "custom" && entry.customType === RECOVERY_OPENED_TYPE)) {
-				pi.appendEntry(RECOVERY_OPENED_TYPE);
+		const file = ctx.sessionManager.getSessionFile();
+		if (event.reason === "reload" || !file?.endsWith(RECOVERY_SUFFIX)) return;
+		const branch = ctx.sessionManager.getBranch();
+		if (buildSessionContext(branch).messages.some((message) => message.role !== "system")) {
+			// Pi cannot append startup settings when thinking precedes effective conversation.
+			let hasThinking = false;
+			for (const entry of branch) {
+				if (entry.type === "thinking_level_change") hasThinking = true;
+				if (hasThinking && sessionEntryToContextMessages(entry).some((message) => message.role !== "system")) return;
 			}
-		} else {
-			removeSavedRecovery(ctx, drafts);
 		}
+		const entries = parseSessionEntries(readFileSync(file, "utf8"));
+
+		// Pi appends startup model settings to message-empty sessions before this event.
+		let mtimeMs: number | undefined;
+		let stashIndex = -1;
+		let legacy = false;
+		const activityMtimeMs = recoveryActivityMtime(file);
+		for (let index = entries.length - 1; index >= 0; index--) {
+			const entry = entries[index];
+			if (entry.type !== "custom" || entry.customType !== STASH_ENTRY_TYPE) continue;
+			const snapshot = entry.data as { drafts?: unknown; recoveryMtimeMs?: unknown } | undefined;
+			if (!Array.isArray(snapshot?.drafts) || !snapshot.drafts.every((draft) => typeof draft === "string")) continue;
+			// Older recovery files have only the entry timestamp, without the sub-millisecond order.
+			mtimeMs = localRecoveryMtime(snapshot.recoveryMtimeMs) ??
+				localRecoveryMtime(Date.parse(entry.timestamp));
+			stashIndex = index;
+			legacy = snapshot.recoveryMtimeMs === undefined && activityMtimeMs === undefined;
+			break;
+		}
+		if (mtimeMs === undefined) return;
+		// A different window may have written a newer conversation on another branch.
+		for (const entry of entries) {
+			if (entry.type === "session" || (entry.type === "message" && entry.message.role === "system")) continue;
+			// A context edit changes the conversation without projecting a message itself.
+			if ((entry.type as string) !== "context_edit" && sessionEntryToContextMessages(entry).length === 0) continue;
+			const changed = localRecoveryMtime(Date.parse(entry.timestamp));
+			if (changed !== undefined) mtimeMs = Math.max(mtimeMs, changed + 1.01);
+		}
+		const startupIds = new Set<string>();
+		if (legacy) {
+			const branch = ctx.sessionManager.getBranch();
+			let thinkingIndex = branch.length - 1;
+			while (thinkingIndex >= 0 && branch[thinkingIndex].type !== "thinking_level_change") thinkingIndex--;
+			if (thinkingIndex >= 0) {
+				startupIds.add(branch[thinkingIndex].id);
+				if (ctx.model && branch[thinkingIndex - 1]?.type === "model_change") {
+					startupIds.add(branch[thinkingIndex - 1].id);
+				}
+			}
+		}
+		for (let index = stashIndex + 1; index < entries.length; index++) {
+			const entry = entries[index];
+			if (entry.type !== "session_info" && entry.type !== "label" &&
+				!(legacy && !startupIds.has(entry.id) &&
+					(entry.type === "model_change" || entry.type === "thinking_level_change" ||
+						(entry.type === "custom" && entry.customType === "pi-stash-recovery-opened")))) continue;
+			const changed = localRecoveryMtime(Date.parse(entry.timestamp));
+			if (changed !== undefined) mtimeMs = Math.max(mtimeMs, changed + 1.01);
+		}
+		mtimeMs = Math.max(mtimeMs, activityMtimeMs ?? 0);
+		utimesSync(file, statSync(file).atime, mtimeMs / 1000);
+		// Mark a legacy recovery as migrated so a later startup's settings aren't counted as edits.
+		if (legacy) recordRecoveryActivity(file, mtimeMs);
 	});
+
+	pi.on("model_select", (_event, ctx) => recordNativeRecoveryChange(ctx));
+	pi.on("thinking_level_select", (_event, ctx) => recordNativeRecoveryChange(ctx));
+	pi.on("session_info_changed", (_event, ctx) => recordNativeRecoveryChange(ctx));
 
 	pi.on("session_tree", async (_event, ctx) => {
 		reset(ctx, hydrateState(ctx.sessionManager.getBranch()).drafts);
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
-		removeSavedRecovery(ctx, drafts);
 		reset(ctx, []);
-	});
-
-	pi.on("agent_end", async (_event, ctx) => {
-		removeSavedRecovery(ctx, drafts);
 	});
 
 	// Additive fork event; older Pi hosts simply never dispatch it. Keep stock API typing elsewhere.
