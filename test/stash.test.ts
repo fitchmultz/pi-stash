@@ -237,7 +237,6 @@ test("a fresh-session stash survives restarting before the first assistant reply
 		assert.equal(resumed.getSessionFile() !== originalFile, neededRecovery);
 
 		appendAssistant(manager);
-		await harness.events.get("agent_end")?.({}, context.ctx);
 		if (neededRecovery) assert.equal(existsSync(resumed.getSessionFile()!), true);
 		assert.deepEqual(hydrateState(SessionManager.open(originalFile).getBranch()).drafts, expected);
 	} finally {
@@ -265,7 +264,6 @@ test("an opened recovery session is kept when the original session saves", async
 		await recoveredHarness.events.get("session_start")?.({}, recoveredContext.ctx);
 
 		appendAssistant(manager);
-		await harness.events.get("agent_end")?.({}, context.ctx);
 		assert.equal(existsSync(recoveryFile), true);
 		await recoveredHarness.commands.get("stash")?.handler("independent draft", recoveredContext.ctx);
 		assert.deepEqual(hydrateState(SessionManager.open(recoveryFile).getBranch()).drafts, [
@@ -314,7 +312,6 @@ test("stashing again does not overwrite an opened recovery session", async (t) =
 		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), other.getSessionFile());
 
 		appendAssistant(original);
-		await originalHarness.events.get("agent_end")?.({}, originalContext.ctx);
 		assert.equal(existsSync(openedFile), true);
 		assert.equal(existsSync(latest.getSessionFile()!), true);
 	} finally {
@@ -322,7 +319,7 @@ test("stashing again does not overwrite an opened recovery session", async (t) =
 	}
 });
 
-test("a recovery loaded before the original saves stays writable", async (t) => {
+test("a recovery loaded before the original saves stays writable after agent end", async (t) => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-opening-recovery-"));
 	try {
 		const sessionDir = join(cwd, "sessions");
@@ -468,7 +465,6 @@ test("a late recovery startup cannot undo an original clear", async (t) => {
 		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), emptyRecovery);
 
 		appendAssistant(original);
-		await harness.events.get("agent_end")?.({}, context.ctx);
 		assert.deepEqual(hydrateState(SessionManager.open(original.getSessionFile()!).getBranch()).drafts, []);
 		assert.equal(existsSync(emptyRecovery!), true);
 		assert.deepEqual(hydrateState(SessionManager.continueRecent(cwd, sessionDir).getBranch()).drafts, []);
@@ -477,7 +473,7 @@ test("a late recovery startup cannot undo an original clear", async (t) => {
 	}
 });
 
-test("agent end does not overtake a later recovery edit", async (t) => {
+test("agent end does not overtake later stash edits", async (t) => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-later-recovery-edit-"));
 	try {
 		const sessionDir = join(cwd, "sessions");
@@ -538,7 +534,6 @@ test("saving one session does not delete another session's recovery", async (t) 
 		const firstRecovery = SessionManager.continueRecent(cwd, sessionDir).getSessionFile()!;
 
 		appendAssistant(first);
-		await firstHarness.events.get("agent_end")?.({}, firstContext.ctx);
 		assert.equal(existsSync(firstRecovery), true);
 		assert.equal(existsSync(otherRecovery), true);
 		assert.deepEqual(hydrateState(SessionManager.open(otherRecovery).getBranch()).drafts, ["other draft"]);
@@ -564,7 +559,6 @@ test("leaving an unsaved stash branch does not delete its recovery", async (t) =
 		const recovery = SessionManager.continueRecent(cwd, sessionDir).getSessionFile()!;
 		manager.branch(earlier);
 		await harness.events.get("session_tree")?.({}, context.ctx);
-		await harness.events.get("agent_end")?.({}, context.ctx);
 		assert.equal(existsSync(recovery), true);
 		await harness.commands.get("stash")?.handler("other branch draft", context.ctx);
 		assert.equal(existsSync(recovery), true);
