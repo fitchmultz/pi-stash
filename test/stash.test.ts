@@ -547,6 +547,36 @@ test("an older conversation on another branch does not promote a recovery", asyn
 	}
 });
 
+test("a system-only recovery branch does not promote an old conversation", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-system-only-branch-"));
+	try {
+		const sessionDir = join(cwd, "sessions");
+		const file = join(sessionDir, "system-pi-stash-recovery.jsonl");
+		mkdirSync(sessionDir, { recursive: true });
+		writeFileSync(file, "");
+		const recovery = SessionManager.open(file, sessionDir, cwd);
+		recovery.appendCustomEntry(STASH_ENTRY_TYPE, { drafts: ["old draft"], recoveryMtimeMs: Date.now() });
+		const systemId = recovery.appendMessage({ role: "system", content: "prompt", timestamp: Date.now() });
+		appendAssistant(recovery);
+		recovery.branch(systemId);
+		recovery.appendCustomEntry(STASH_ENTRY_TYPE, {
+			drafts: ["old branch draft"], recoveryMtimeMs: Date.now(),
+		});
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		const newer = SessionManager.create(cwd, sessionDir);
+		appendAssistant(newer);
+
+		const opened = SessionManager.open(file);
+		opened.appendThinkingLevelChange("off");
+		const harness = createHarness((type, data) => opened.appendCustomEntry(type, data));
+		const context = createContext({ cwd, sessionManager: opened, mode: "tui" });
+		await harness.events.get("session_start")?.({}, context.ctx);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), newer.getSessionFile());
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
 test("an imported recovery timestamp cannot pin recent sessions", async (t) => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-imported-time-"));
 	try {

@@ -489,7 +489,8 @@ export default function piStash(pi: ExtensionAPI): void {
 		reset(ctx, hydrateState(ctx.sessionManager.getBranch()).drafts);
 		const file = ctx.sessionManager.getSessionFile();
 		if (event.reason === "reload" || !file?.endsWith(RECOVERY_SUFFIX)) return;
-		if (buildSessionContext(ctx.sessionManager.getEntries(), ctx.sessionManager.getLeafId()).messages.length > 0) return;
+		if (buildSessionContext(ctx.sessionManager.getEntries(), ctx.sessionManager.getLeafId()).messages
+			.some((message) => message.role !== "system")) return;
 		const entries = parseSessionEntries(readFileSync(file, "utf8"));
 
 		// Pi appends startup model settings to message-empty sessions before this event.
