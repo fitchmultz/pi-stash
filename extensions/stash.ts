@@ -7,7 +7,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { existsSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { join, parse } from "node:path";
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -116,15 +116,23 @@ function updateStatus(ctx: ExtensionContext, drafts: readonly string[]): void {
 	ctx.ui.setStatus("pi-stash", ctx.ui.theme.fg("accent", `📦 ${countLabel(drafts.length)}`));
 }
 
+function makeMostRecent(ctx: ExtensionContext, sessionFile: string): void {
+	const dir = ctx.sessionManager.getSessionDir();
+	const newest = readdirSync(dir)
+		.filter((name) => name.endsWith(".jsonl"))
+		.reduce((mtime, name) => Math.max(mtime, statSync(join(dir, name)).mtimeMs), Date.now());
+	utimesSync(sessionFile, new Date(), new Date(Math.ceil(newest) + 1));
+}
+
 function removeUnusedRecoveries(
 	ctx: ExtensionContext,
 	drafts: readonly string[],
-	unsavedUpdate?: { keep?: string },
+	clearUnsaved = false,
 ): void {
 	const sessionFile = ctx.sessionManager.getSessionFile();
 	if (!sessionFile) return;
 	const savedOnDisk = existsSync(sessionFile);
-	if (!savedOnDisk && !unsavedUpdate) return;
+	if (!savedOnDisk && !clearUnsaved) return;
 
 	try {
 		const dir = ctx.sessionManager.getSessionDir();
@@ -140,7 +148,6 @@ function removeUnusedRecoveries(
 		const activeEntryIds = savedOnDisk ? undefined : new Set(ctx.sessionManager.getBranch().map((entry) => entry.id));
 		for (const name of recoveries) {
 			const recovery = join(dir, name);
-			if (recovery === unsavedUpdate?.keep) continue;
 			const entries = SessionManager.open(recovery).getEntries();
 			if (entries.length !== 2) continue;
 			if (activeEntryIds) {
@@ -163,25 +170,28 @@ function persistState(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly 
 	if (!sessionFile) return;
 	if (existsSync(sessionFile)) {
 		removeUnusedRecoveries(ctx, drafts);
+		if (sessionFile.endsWith(RECOVERY_SUFFIX)) makeMostRecent(ctx, sessionFile);
 		return;
 	}
 	if (drafts.length === 0) {
-		removeUnusedRecoveries(ctx, drafts, {});
+		removeUnusedRecoveries(ctx, drafts, true);
 		return;
 	}
 
-	const recovery = join(ctx.sessionManager.getSessionDir(), `${parse(sessionFile).name}-${randomUUID()}${RECOVERY_SUFFIX}`);
+	const dir = ctx.sessionManager.getSessionDir();
+	const recovery = join(dir, `${parse(sessionFile).name}-${randomUUID()}${RECOVERY_SUFFIX}`);
 	const temporary = `${recovery}.tmp`;
 	try {
 		writeFileSync(temporary, "", { flag: "wx", mode: 0o600 });
-		const saved = SessionManager.open(temporary, ctx.sessionManager.getSessionDir(), ctx.cwd);
+		const saved = SessionManager.open(temporary, dir, ctx.cwd);
 		saved.appendSessionInfo("Stashed drafts");
 		saved.appendCustomEntry(STASH_ENTRY_TYPE, {
 			drafts: [...drafts],
 			sourceEntryId: ctx.sessionManager.getLeafId(),
 		});
 		renameSync(temporary, recovery);
-		removeUnusedRecoveries(ctx, drafts, { keep: recovery });
+		// ponytail: Official Pi cannot claim a recovery before session_start. Keep older copies until it saves custom entries eagerly.
+		makeMostRecent(ctx, recovery);
 	} finally {
 		rmSync(temporary, { force: true });
 	}
@@ -487,6 +497,7 @@ export default function piStash(pi: ExtensionAPI): void {
 			if (!ctx.sessionManager.getEntries().some((entry) => entry.type === "custom" && entry.customType === RECOVERY_OPENED_TYPE)) {
 				pi.appendEntry(RECOVERY_OPENED_TYPE);
 			}
+			makeMostRecent(ctx, sessionFile);
 		} else {
 			removeUnusedRecoveries(ctx, drafts);
 		}

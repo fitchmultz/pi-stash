@@ -7,7 +7,7 @@
  */
 
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -296,12 +296,15 @@ test("stashing again does not overwrite an opened recovery session", async (t) =
 		await openedHarness.events.get("session_start")?.({}, openedContext.ctx);
 		await openedHarness.commands.get("stash")?.handler("other session", openedContext.ctx);
 
+		const future = new Date(Date.now() + 1_000);
+		utimesSync(openedFile, future, future);
 		await originalHarness.commands.get("stash")?.handler("second draft", originalContext.ctx);
 		assert.deepEqual(hydrateState(SessionManager.open(openedFile).getBranch()).drafts, [
 			"other session", "first draft",
 		]);
 		const latest = SessionManager.continueRecent(cwd, sessionDir);
 		assert.notEqual(latest.getSessionFile(), openedFile);
+		assert.ok(statSync(latest.getSessionFile()!).mtimeMs > statSync(openedFile).mtimeMs);
 		assert.deepEqual(hydrateState(latest.getBranch()).drafts, ["second draft", "first draft"]);
 
 		appendAssistant(original);
@@ -313,7 +316,36 @@ test("stashing again does not overwrite an opened recovery session", async (t) =
 	}
 });
 
-test("clearing a recovered stash does not resurrect an older backup", async (t) => {
+test("a recovery loaded before another stash stays writable", async (t) => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-opening-recovery-"));
+	try {
+		const sessionDir = join(cwd, "sessions");
+		const original = SessionManager.create(cwd, sessionDir);
+		const originalHarness = createHarness((type, data) => original.appendCustomEntry(type, data));
+		const originalContext = createContext({ cwd, sessionManager: original, mode: "tui" });
+		await originalHarness.commands.get("stash")?.handler("first draft", originalContext.ctx);
+		if (existsSync(original.getSessionFile()!)) {
+			t.skip("this Pi host saves new sessions immediately");
+			return;
+		}
+
+		const opening = SessionManager.continueRecent(cwd, sessionDir);
+		const openingFile = opening.getSessionFile()!;
+		await originalHarness.commands.get("stash")?.handler("new original draft", originalContext.ctx);
+		assert.equal(existsSync(openingFile), true);
+		const openingHarness = createHarness((type, data) => opening.appendCustomEntry(type, data));
+		const openingContext = createContext({ cwd, sessionManager: opening, mode: "tui" });
+		await openingHarness.events.get("session_start")?.({}, openingContext.ctx);
+		await openingHarness.commands.get("stash")?.handler("other window", openingContext.ctx);
+		assert.deepEqual(hydrateState(SessionManager.open(openingFile).getBranch()).drafts, [
+			"other window", "first draft",
+		]);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("clearing the latest recovery stays cleared on continue", async (t) => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-clear-latest-recovery-"));
 	try {
 		const sessionDir = join(cwd, "sessions");
@@ -321,11 +353,14 @@ test("clearing a recovered stash does not resurrect an older backup", async (t) 
 		const harness = createHarness((type, data) => original.appendCustomEntry(type, data));
 		const context = createContext({ cwd, sessionManager: original, mode: "tui" });
 		await harness.commands.get("stash")?.handler("first draft", context.ctx);
-		await harness.commands.get("stash")?.handler("second draft", context.ctx);
 		if (existsSync(original.getSessionFile()!)) {
 			t.skip("this Pi host saves new sessions immediately");
 			return;
 		}
+		const firstRecovery = SessionManager.continueRecent(cwd, sessionDir).getSessionFile()!;
+		const future = new Date(Date.now() + 1_000);
+		utimesSync(firstRecovery, future, future);
+		await harness.commands.get("stash")?.handler("second draft", context.ctx);
 
 		const recovered = SessionManager.continueRecent(cwd, sessionDir);
 		const recoveredHarness = createHarness((type, data) => recovered.appendCustomEntry(type, data));
@@ -335,8 +370,7 @@ test("clearing a recovered stash does not resurrect an older backup", async (t) 
 		await recoveredHarness.events.get("session_start")?.({}, recoveredContext.ctx);
 		await recoveredHarness.commands.get("stash-list")?.handler("", recoveredContext.ctx);
 
-		const sessions = await SessionManager.list(cwd, sessionDir);
-		assert.deepEqual(sessions.map(({ path }) => hydrateState(SessionManager.open(path).getBranch()).drafts), [[]]);
+		assert.deepEqual(hydrateState(SessionManager.continueRecent(cwd, sessionDir).getBranch()).drafts, []);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}
