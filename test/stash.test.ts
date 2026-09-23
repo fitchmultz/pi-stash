@@ -458,13 +458,40 @@ test("a late recovery startup cannot undo an original clear", async (t) => {
 		await openingHarness.events.get("session_start")?.({}, openingContext.ctx);
 		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), emptyRecovery);
 
-		const future = new Date(Date.now() + 100);
-		utimesSync(opening.getSessionFile()!, future, future);
 		appendAssistant(original);
 		await harness.events.get("agent_end")?.({}, context.ctx);
-		const resumed = SessionManager.continueRecent(cwd, sessionDir);
-		assert.equal(resumed.getSessionFile(), original.getSessionFile());
-		assert.deepEqual(hydrateState(resumed.getBranch()).drafts, []);
+		assert.deepEqual(hydrateState(SessionManager.open(original.getSessionFile()!).getBranch()).drafts, []);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("agent end does not overtake a later recovery edit", async (t) => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-later-recovery-edit-"));
+	try {
+		const sessionDir = join(cwd, "sessions");
+		const original = SessionManager.create(cwd, sessionDir);
+		const harness = createHarness((type, data) => original.appendCustomEntry(type, data));
+		const context = createContext({ cwd, sessionManager: original, mode: "tui" });
+		await harness.commands.get("stash")?.handler("first draft", context.ctx);
+		if (existsSync(original.getSessionFile()!)) {
+			t.skip("this Pi host saves new sessions immediately");
+			return;
+		}
+
+		const opened = SessionManager.continueRecent(cwd, sessionDir);
+		const openedHarness = createHarness((type, data) => opened.appendCustomEntry(type, data));
+		const openedContext = createContext({ cwd, sessionManager: opened, mode: "tui" });
+		await openedHarness.events.get("session_start")?.({}, openedContext.ctx);
+		appendAssistant(original);
+		await openedHarness.commands.get("stash")?.handler("later edit", openedContext.ctx);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), opened.getSessionFile());
+
+		await harness.events.get("agent_end")?.({}, context.ctx);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), opened.getSessionFile());
+		assert.deepEqual(hydrateState(SessionManager.open(opened.getSessionFile()!).getBranch()).drafts, [
+			"later edit", "first draft",
+		]);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}

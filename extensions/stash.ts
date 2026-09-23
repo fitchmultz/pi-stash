@@ -499,10 +499,7 @@ export default function piStash(pi: ExtensionAPI): void {
 	});
 
 	pi.on("agent_end", async (_event, ctx) => {
-		if (removeUnusedRecoveries(ctx, drafts)) {
-			const sessionFile = ctx.sessionManager.getSessionFile();
-			if (sessionFile) makeMostRecent(ctx, sessionFile);
-		}
+		removeUnusedRecoveries(ctx, drafts);
 	});
 
 	// Additive fork event; older Pi hosts simply never dispatch it. Keep stock API typing elsewhere.
