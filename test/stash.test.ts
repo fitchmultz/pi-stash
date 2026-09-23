@@ -367,6 +367,10 @@ test("opening an older recovery does not make it the latest session", async (t) 
 		const opened = SessionManager.continueRecent(cwd, sessionDir);
 		await originalHarness.commands.get("stash")?.handler("second draft", originalContext.ctx);
 		const latestFile = SessionManager.continueRecent(cwd, sessionDir).getSessionFile();
+		opened.appendModelChange("openai", "test");
+		opened.appendThinkingLevelChange("off");
+		const future = new Date(statSync(latestFile!).mtimeMs + 1_000);
+		utimesSync(opened.getSessionFile()!, future, future);
 		const openedHarness = createHarness((type, data) => opened.appendCustomEntry(type, data));
 		const openedContext = createContext({ cwd, sessionManager: opened, mode: "tui" });
 		await openedHarness.events.get("session_start")?.({}, openedContext.ctx);
@@ -459,6 +463,10 @@ test("a late recovery startup cannot undo an original clear", async (t) => {
 		const opening = SessionManager.continueRecent(cwd, sessionDir);
 		await harness.commands.get("stash-list")?.handler("", context.ctx);
 		const emptyRecovery = SessionManager.continueRecent(cwd, sessionDir).getSessionFile();
+		opening.appendModelChange("openai", "test");
+		opening.appendThinkingLevelChange("off");
+		const future = new Date(statSync(emptyRecovery!).mtimeMs + 1_000);
+		utimesSync(opening.getSessionFile()!, future, future);
 		const openingHarness = createHarness((type, data) => opening.appendCustomEntry(type, data));
 		const openingContext = createContext({ cwd, sessionManager: opening, mode: "tui" });
 		await openingHarness.events.get("session_start")?.({}, openingContext.ctx);

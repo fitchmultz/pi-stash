@@ -11,7 +11,7 @@ import { existsSync, readdirSync, renameSync, rmSync, statSync, utimesSync, writ
 import { join, parse } from "node:path";
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { DynamicBorder, keyHint, rawKeyHint, SessionManager } from "@earendil-works/pi-coding-agent";
+import { buildSessionContext, DynamicBorder, keyHint, rawKeyHint, SessionManager } from "@earendil-works/pi-coding-agent";
 import { Container, Key, matchesKey, type SelectItem, SelectList, Text } from "@earendil-works/pi-tui";
 import {
 	clampSelectedIndex,
@@ -115,21 +115,25 @@ function updateStatus(ctx: ExtensionContext, drafts: readonly string[]): void {
 	ctx.ui.setStatus("pi-stash", ctx.ui.theme.fg("accent", `📦 ${countLabel(drafts.length)}`));
 }
 
-function makeMostRecent(ctx: ExtensionContext, sessionFile: string): void {
+function nextSessionMtime(ctx: ExtensionContext): number {
 	const dir = ctx.sessionManager.getSessionDir();
 	const newest = readdirSync(dir)
 		.filter((name) => name.endsWith(".jsonl"))
 		.reduce((mtime, name) => Math.max(mtime, statSync(join(dir, name)).mtimeMs), Date.now());
 	// Ten microseconds breaks ties without the millisecond skew of a Date.
-	utimesSync(sessionFile, new Date(), (newest + 0.01) / 1000);
+	return newest + 0.01;
 }
 
 function persistState(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly string[]): void {
-	pi.appendEntry(STASH_ENTRY_TYPE, { drafts: [...drafts] });
 	const sessionFile = ctx.sessionManager.getSessionFile();
+	const recoveryMtimeMs = sessionFile?.endsWith(RECOVERY_SUFFIX) ? nextSessionMtime(ctx) : undefined;
+	pi.appendEntry(STASH_ENTRY_TYPE, {
+		drafts: [...drafts],
+		...(recoveryMtimeMs === undefined ? {} : { recoveryMtimeMs }),
+	});
 	if (!sessionFile) return;
 	if (existsSync(sessionFile)) {
-		makeMostRecent(ctx, sessionFile);
+		utimesSync(sessionFile, new Date(), (recoveryMtimeMs ?? nextSessionMtime(ctx)) / 1000);
 		return;
 	}
 
@@ -140,10 +144,11 @@ function persistState(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly 
 		writeFileSync(temporary, "", { flag: "wx", mode: 0o600 });
 		const saved = SessionManager.open(temporary, dir, ctx.cwd);
 		saved.appendSessionInfo("Stashed drafts");
-		saved.appendCustomEntry(STASH_ENTRY_TYPE, { drafts: [...drafts] });
+		const mtimeMs = nextSessionMtime(ctx);
+		saved.appendCustomEntry(STASH_ENTRY_TYPE, { drafts: [...drafts], recoveryMtimeMs: mtimeMs });
 		renameSync(temporary, recovery);
 		// ponytail: Official Pi cannot tell whether another window loaded a recovery before session_start. Keep each copy until official Pi saves custom entries eagerly.
-		makeMostRecent(ctx, recovery);
+		utimesSync(recovery, new Date(), mtimeMs / 1000);
 	} finally {
 		rmSync(temporary, { force: true });
 	}
@@ -442,8 +447,26 @@ export default function piStash(pi: ExtensionAPI): void {
 		updateStatus(ctx, drafts);
 	};
 
-	pi.on("session_start", async (_event, ctx) => {
+	pi.on("session_start", async (event, ctx) => {
 		reset(ctx, hydrateState(ctx.sessionManager.getBranch()).drafts);
+		const file = ctx.sessionManager.getSessionFile();
+		if (event.reason === "reload" || !file?.endsWith(RECOVERY_SUFFIX)) return;
+		const entries = ctx.sessionManager.getEntries();
+		if (buildSessionContext(entries, ctx.sessionManager.getLeafId()).messages.length > 0) return;
+
+		// Pi appends startup model settings to message-empty sessions before this event.
+		for (let index = entries.length - 1; index >= 0; index--) {
+			const entry = entries[index];
+			if (entry.type !== "custom" || entry.customType !== STASH_ENTRY_TYPE) continue;
+			const snapshot = entry.data as { drafts?: unknown; recoveryMtimeMs?: unknown } | undefined;
+			if (!Array.isArray(snapshot?.drafts) || !snapshot.drafts.every((draft) => typeof draft === "string")) continue;
+			const recorded = snapshot.recoveryMtimeMs;
+			const mtimeMs = typeof recorded === "number" && Number.isFinite(recorded) ? recorded : Date.parse(entry.timestamp);
+			if (Number.isFinite(mtimeMs) && mtimeMs >= 0) {
+				utimesSync(file, statSync(file).atime, mtimeMs / 1000);
+			}
+			break;
+		}
 	});
 
 	pi.on("session_tree", async (_event, ctx) => {
