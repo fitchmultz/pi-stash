@@ -124,15 +124,9 @@ function makeMostRecent(ctx: ExtensionContext, sessionFile: string): void {
 	utimesSync(sessionFile, new Date(), new Date(Math.ceil(newest) + 1));
 }
 
-function removeUnusedRecoveries(
-	ctx: ExtensionContext,
-	drafts: readonly string[],
-	clearUnsaved = false,
-): void {
+function removeUnusedRecoveries(ctx: ExtensionContext, drafts: readonly string[]): void {
 	const sessionFile = ctx.sessionManager.getSessionFile();
-	if (!sessionFile) return;
-	const savedOnDisk = existsSync(sessionFile);
-	if (!savedOnDisk && !clearUnsaved) return;
+	if (!sessionFile || !existsSync(sessionFile)) return;
 
 	try {
 		const dir = ctx.sessionManager.getSessionDir();
@@ -140,24 +134,11 @@ function removeUnusedRecoveries(
 		const recoveries = readdirSync(dir).filter((name) => name.startsWith(prefix) && name.endsWith(RECOVERY_SUFFIX));
 		if (recoveries.length === 0) return;
 
-		if (savedOnDisk) {
-			const saved = hydrateState(SessionManager.open(sessionFile).getBranch()).drafts;
-			if (saved.length !== drafts.length || saved.some((draft, index) => draft !== drafts[index])) return;
-		}
-
-		const activeEntryIds = savedOnDisk ? undefined : new Set(ctx.sessionManager.getBranch().map((entry) => entry.id));
+		const saved = hydrateState(SessionManager.open(sessionFile).getBranch()).drafts;
+		if (saved.length !== drafts.length || saved.some((draft, index) => draft !== drafts[index])) return;
 		for (const name of recoveries) {
 			const recovery = join(dir, name);
-			const entries = SessionManager.open(recovery).getEntries();
-			if (entries.length !== 2) continue;
-			if (activeEntryIds) {
-				const snapshot = entries[1];
-				const sourceEntryId = snapshot.type === "custom" && snapshot.customType === STASH_ENTRY_TYPE
-					? (snapshot.data as { sourceEntryId?: string } | undefined)?.sourceEntryId
-					: undefined;
-				if (!sourceEntryId || !activeEntryIds.has(sourceEntryId)) continue;
-			}
-			rmSync(recovery);
+			if (SessionManager.open(recovery).getEntries().length === 2) rmSync(recovery);
 		}
 	} catch {
 		// Keep recovery sessions if the original cannot be verified or cleaned up.
@@ -173,10 +154,6 @@ function persistState(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly 
 		if (sessionFile.endsWith(RECOVERY_SUFFIX)) makeMostRecent(ctx, sessionFile);
 		return;
 	}
-	if (drafts.length === 0) {
-		removeUnusedRecoveries(ctx, drafts, true);
-		return;
-	}
 
 	const dir = ctx.sessionManager.getSessionDir();
 	const recovery = join(dir, `${parse(sessionFile).name}-${randomUUID()}${RECOVERY_SUFFIX}`);
@@ -185,12 +162,9 @@ function persistState(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly 
 		writeFileSync(temporary, "", { flag: "wx", mode: 0o600 });
 		const saved = SessionManager.open(temporary, dir, ctx.cwd);
 		saved.appendSessionInfo("Stashed drafts");
-		saved.appendCustomEntry(STASH_ENTRY_TYPE, {
-			drafts: [...drafts],
-			sourceEntryId: ctx.sessionManager.getLeafId(),
-		});
+		saved.appendCustomEntry(STASH_ENTRY_TYPE, { drafts: [...drafts] });
 		renameSync(temporary, recovery);
-		// ponytail: Official Pi cannot claim a recovery before session_start. Keep older copies until it saves custom entries eagerly.
+		// ponytail: Official Pi cannot claim a recovery before session_start. Keep older copies until its original session saves; retire this fallback when official Pi saves custom entries eagerly.
 		makeMostRecent(ctx, recovery);
 	} finally {
 		rmSync(temporary, { force: true });

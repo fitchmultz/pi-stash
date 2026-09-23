@@ -376,6 +376,38 @@ test("clearing the latest recovery stays cleared on continue", async (t) => {
 	}
 });
 
+test("clearing the unsaved original keeps an opened recovery separate", async (t) => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-clear-original-"));
+	try {
+		const sessionDir = join(cwd, "sessions");
+		const original = SessionManager.create(cwd, sessionDir);
+		const harness = createHarness((type, data) => original.appendCustomEntry(type, data));
+		const context = createContext({
+			cwd, sessionManager: original, mode: "tui", customResult: { action: "clear" },
+		});
+		await harness.commands.get("stash")?.handler("first draft", context.ctx);
+		if (existsSync(original.getSessionFile()!)) {
+			t.skip("this Pi host saves new sessions immediately");
+			return;
+		}
+
+		const opened = SessionManager.continueRecent(cwd, sessionDir);
+		const openedFile = opened.getSessionFile()!;
+		const openedHarness = createHarness((type, data) => opened.appendCustomEntry(type, data));
+		const openedContext = createContext({ cwd, sessionManager: opened, mode: "tui" });
+		await openedHarness.events.get("session_start")?.({}, openedContext.ctx);
+		await openedHarness.commands.get("stash")?.handler("other window", openedContext.ctx);
+
+		await harness.commands.get("stash-list")?.handler("", context.ctx);
+		assert.deepEqual(hydrateState(SessionManager.continueRecent(cwd, sessionDir).getBranch()).drafts, []);
+		assert.deepEqual(hydrateState(SessionManager.open(openedFile).getBranch()).drafts, [
+			"other window", "first draft",
+		]);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
 test("leaving an unsaved stash branch does not delete its recovery", async (t) => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-unsaved-branch-"));
 	try {
@@ -442,12 +474,10 @@ test("clearing an early stash does not resurrect it on restart", async () => {
 		});
 
 		await harness.commands.get("stash")?.handler("discard me", context.ctx);
-		const neededRecovery = !existsSync(manager.getSessionFile()!);
 		const recovery = SessionManager.continueRecent(cwd, sessionDir).getSessionFile()!;
 		assert.equal(existsSync(recovery), true);
 
 		await harness.commands.get("stash-list")?.handler("", context.ctx);
-		if (neededRecovery) assert.equal(existsSync(recovery), false);
 		assert.deepEqual(hydrateState(SessionManager.continueRecent(cwd, sessionDir).getBranch()).drafts, []);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
