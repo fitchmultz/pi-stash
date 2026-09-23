@@ -119,9 +119,9 @@ function nextSessionMtime(ctx: ExtensionContext): number {
 	const dir = ctx.sessionManager.getSessionDir();
 	const newest = readdirSync(dir)
 		.filter((name) => name.endsWith(".jsonl"))
-		.reduce((mtime, name) => Math.max(mtime, statSync(join(dir, name)).mtimeMs), Date.now());
-	// Pi 0.84 compares whole milliseconds; the extra microseconds survive Node 22's utimes rounding.
-	return Math.floor(newest) + 1.01;
+		.reduce((mtime, name) => Math.max(mtime, statSync(join(dir, name)).mtime.getTime()), Date.now());
+	// Pi 0.84 compares Date mtimes; the extra microseconds survive Node 22's utimes rounding.
+	return newest + 1.01;
 }
 
 function persistState(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly string[]): void {
