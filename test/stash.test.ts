@@ -494,15 +494,14 @@ test("a conversation on another recovery branch is not backdated", async () => {
 			const stashId = recovery.appendCustomEntry(STASH_ENTRY_TYPE, {
 				drafts: ["draft"], recoveryMtimeMs: Date.now() - 10_000,
 			});
-			if (activity === "assistant") appendAssistant(recovery);
-			else recovery.appendCustomMessageEntry("other-extension", "conversation update", false);
 			const other = SessionManager.create(cwd, sessionDir);
 			appendAssistant(other);
+			await new Promise((resolve) => setTimeout(resolve, 20));
+			if (activity === "assistant") appendAssistant(recovery);
+			else recovery.appendCustomMessageEntry("other-extension", "conversation update", false);
 			recovery.branch(stashId);
 			recovery.appendModelChange("openai", "startup-model");
 			recovery.appendThinkingLevelChange("off");
-			const later = new Date(statSync(other.getSessionFile()!).mtimeMs + 1_000);
-			utimesSync(file, later, later);
 			assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), file);
 
 			const harness = createHarness((type, data) => recovery.appendCustomEntry(type, data));
@@ -512,6 +511,39 @@ test("a conversation on another recovery branch is not backdated", async () => {
 		} finally {
 			rmSync(cwd, { recursive: true, force: true });
 		}
+	}
+});
+
+test("an older conversation on another branch does not promote a recovery", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-older-branch-message-"));
+	try {
+		const sessionDir = join(cwd, "sessions");
+		const file = join(sessionDir, "older-pi-stash-recovery.jsonl");
+		mkdirSync(sessionDir, { recursive: true });
+		writeFileSync(file, "");
+		const recovery = SessionManager.open(file, sessionDir, cwd);
+		const stashId = recovery.appendCustomEntry(STASH_ENTRY_TYPE, {
+			drafts: ["old draft"], recoveryMtimeMs: Date.now(),
+		});
+		appendAssistant(recovery);
+		recovery.branch(stashId);
+		recovery.appendCustomEntry(STASH_ENTRY_TYPE, {
+			drafts: ["old branch draft"], recoveryMtimeMs: Date.now(),
+		});
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		const newer = SessionManager.create(cwd, sessionDir);
+		appendAssistant(newer);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), newer.getSessionFile());
+
+		const opened = SessionManager.open(file);
+		opened.appendModelChange("openai", "startup-model");
+		opened.appendThinkingLevelChange("off");
+		const harness = createHarness((type, data) => opened.appendCustomEntry(type, data));
+		const context = createContext({ cwd, sessionManager: opened, mode: "tui" });
+		await harness.events.get("session_start")?.({}, context.ctx);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), newer.getSessionFile());
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
 	}
 });
 

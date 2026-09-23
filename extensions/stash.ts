@@ -11,7 +11,7 @@ import { appendFileSync, existsSync, readFileSync, readdirSync, renameSync, rmSy
 import { join, parse } from "node:path";
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { DynamicBorder, keyHint, parseSessionEntries, rawKeyHint, SessionManager } from "@earendil-works/pi-coding-agent";
+import { buildSessionContext, DynamicBorder, keyHint, parseSessionEntries, rawKeyHint, SessionManager, sessionEntryToContextMessages } from "@earendil-works/pi-coding-agent";
 import { Container, Key, matchesKey, type SelectItem, SelectList, Text } from "@earendil-works/pi-tui";
 import {
 	clampSelectedIndex,
@@ -489,12 +489,8 @@ export default function piStash(pi: ExtensionAPI): void {
 		reset(ctx, hydrateState(ctx.sessionManager.getBranch()).drafts);
 		const file = ctx.sessionManager.getSessionFile();
 		if (event.reason === "reload" || !file?.endsWith(RECOVERY_SUFFIX)) return;
-		const entries = parseSessionEntries(readFileSync(file, "utf8")).filter((entry) => entry.type !== "session");
-		// Another window may have written a conversation on a branch outside this window's leaf.
-		if (entries.some((entry) =>
-			(entry.type === "message" && entry.message.role !== "system") ||
-			["custom_message", "branch_summary", "compaction", "context_window", "context_edit"].includes(entry.type)
-		)) return;
+		if (buildSessionContext(ctx.sessionManager.getEntries(), ctx.sessionManager.getLeafId()).messages.length > 0) return;
+		const entries = parseSessionEntries(readFileSync(file, "utf8"));
 
 		// Pi appends startup model settings to message-empty sessions before this event.
 		let mtimeMs: number | undefined;
@@ -514,6 +510,13 @@ export default function piStash(pi: ExtensionAPI): void {
 			break;
 		}
 		if (mtimeMs === undefined) return;
+		// A different window may have written a newer conversation on another branch.
+		for (const entry of entries) {
+			if (entry.type === "session" || (entry.type === "message" && entry.message.role === "system") ||
+				sessionEntryToContextMessages(entry).length === 0) continue;
+			const changed = localRecoveryMtime(Date.parse(entry.timestamp));
+			if (changed !== undefined) mtimeMs = Math.max(mtimeMs, changed + 1.01);
+		}
 		const startupIds = new Set<string>();
 		if (legacy) {
 			const branch = ctx.sessionManager.getBranch();
