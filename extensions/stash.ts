@@ -461,6 +461,7 @@ export default function piStash(pi: ExtensionAPI): void {
 			const snapshot = entry.data as { drafts?: unknown; recoveryMtimeMs?: unknown } | undefined;
 			if (!Array.isArray(snapshot?.drafts) || !snapshot.drafts.every((draft) => typeof draft === "string")) continue;
 			const recorded = snapshot.recoveryMtimeMs;
+			// Older recovery files have only the entry timestamp, without the sub-millisecond order.
 			const mtimeMs = typeof recorded === "number" && Number.isFinite(recorded) ? recorded : Date.parse(entry.timestamp);
 			if (Number.isFinite(mtimeMs) && mtimeMs >= 0) {
 				utimesSync(file, statSync(file).atime, mtimeMs / 1000);

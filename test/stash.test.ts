@@ -262,6 +262,12 @@ test("an opened recovery session is kept when the original session saves", async
 		const recoveredHarness = createHarness((type, data) => recovered.appendCustomEntry(type, data));
 		const recoveredContext = createContext({ cwd, sessionManager: recovered, mode: "tui" });
 		await recoveredHarness.events.get("session_start")?.({}, recoveredContext.ctx);
+		appendAssistant(recovered);
+		const later = new Date(Date.now() + 1_000);
+		utimesSync(recoveryFile, later, later);
+		const activityMtime = statSync(recoveryFile).mtimeMs;
+		await recoveredHarness.events.get("session_start")?.({}, recoveredContext.ctx);
+		assert.equal(statSync(recoveryFile).mtimeMs, activityMtime);
 
 		appendAssistant(manager);
 		assert.equal(existsSync(recoveryFile), true);
