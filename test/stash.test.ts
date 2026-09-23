@@ -313,6 +313,35 @@ test("stashing again does not overwrite an opened recovery session", async (t) =
 	}
 });
 
+test("clearing a recovered stash does not resurrect an older backup", async (t) => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-clear-latest-recovery-"));
+	try {
+		const sessionDir = join(cwd, "sessions");
+		const original = SessionManager.create(cwd, sessionDir);
+		const harness = createHarness((type, data) => original.appendCustomEntry(type, data));
+		const context = createContext({ cwd, sessionManager: original, mode: "tui" });
+		await harness.commands.get("stash")?.handler("first draft", context.ctx);
+		await harness.commands.get("stash")?.handler("second draft", context.ctx);
+		if (existsSync(original.getSessionFile()!)) {
+			t.skip("this Pi host saves new sessions immediately");
+			return;
+		}
+
+		const recovered = SessionManager.continueRecent(cwd, sessionDir);
+		const recoveredHarness = createHarness((type, data) => recovered.appendCustomEntry(type, data));
+		const recoveredContext = createContext({
+			cwd, sessionManager: recovered, mode: "tui", customResult: { action: "clear" },
+		});
+		await recoveredHarness.events.get("session_start")?.({}, recoveredContext.ctx);
+		await recoveredHarness.commands.get("stash-list")?.handler("", recoveredContext.ctx);
+
+		const sessions = await SessionManager.list(cwd, sessionDir);
+		assert.deepEqual(sessions.map(({ path }) => hydrateState(SessionManager.open(path).getBranch()).drafts), [[]]);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
 test("a failed recovery write leaves the editor draft intact", async () => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-recovery-failure-"));
 	try {

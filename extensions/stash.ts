@@ -116,23 +116,26 @@ function updateStatus(ctx: ExtensionContext, drafts: readonly string[]): void {
 	ctx.ui.setStatus("pi-stash", ctx.ui.theme.fg("accent", `📦 ${countLabel(drafts.length)}`));
 }
 
-function removeUnusedRecoveries(ctx: ExtensionContext, drafts: readonly string[]): void {
+function removeUnusedRecoveries(ctx: ExtensionContext, drafts: readonly string[], keep?: string): void {
 	const sessionFile = ctx.sessionManager.getSessionFile();
 	if (!sessionFile) return;
 	const savedOnDisk = existsSync(sessionFile);
-	if (!savedOnDisk && drafts.length > 0) return;
+	if (!savedOnDisk && drafts.length > 0 && !keep) return;
 
 	try {
+		const dir = ctx.sessionManager.getSessionDir();
+		const prefix = `${parse(sessionFile).name}-`;
+		const recoveries = readdirSync(dir).filter((name) => name.startsWith(prefix) && name.endsWith(RECOVERY_SUFFIX));
+		if (recoveries.length === 0) return;
+
 		if (savedOnDisk) {
 			const saved = hydrateState(SessionManager.open(sessionFile).getBranch()).drafts;
 			if (saved.length !== drafts.length || saved.some((draft, index) => draft !== drafts[index])) return;
 		}
 
-		const dir = ctx.sessionManager.getSessionDir();
-		const prefix = `${parse(sessionFile).name}-`;
-		for (const name of readdirSync(dir)) {
-			if (!name.startsWith(prefix) || !name.endsWith(RECOVERY_SUFFIX)) continue;
+		for (const name of recoveries) {
 			const recovery = join(dir, name);
+			if (recovery === keep) continue;
 			if (SessionManager.open(recovery).getEntries().length === 2) rmSync(recovery);
 		}
 	} catch {
@@ -157,6 +160,7 @@ function persistState(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly 
 		saved.appendSessionInfo("Stashed drafts");
 		saved.appendCustomEntry(STASH_ENTRY_TYPE, { drafts: [...drafts] });
 		renameSync(temporary, recovery);
+		removeUnusedRecoveries(ctx, drafts, recovery);
 	} finally {
 		rmSync(temporary, { force: true });
 	}
