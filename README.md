@@ -49,7 +49,7 @@ The smoke test resolves the installed host's actual `bin.pi` entry (or `PI_HOST_
 - Restores use `pasteToEditor()` when the editor already has text, so retrieval does not destroy whatever is currently in the box.
 - Drafts are kept as a small LIFO stack, so repeated stashes still work naturally.
 - The current stash stack is persisted in session metadata, so `/reload`, session resume, and `/tree` branch navigation keep drafts aligned with the active branch.
-- On Pi versions that wait for the first assistant reply before saving a new session, early stashes create a resumable **Stashed drafts** session. `pi -c` or `/resume` can recover it after a restart. Pi-stash removes an unused recovery session once the original session saves the same drafts; a recovery session you opened remains yours.
+- On Pi versions that wait for the first assistant reply before saving a new session, each early stash update creates a resumable **Stashed drafts** session. `pi -c` or `/resume` can recover the latest draft after a restart. Pi-stash removes unused recovery sessions once the original session saves the same drafts; a recovery session you opened remains yours.
 - Overlapping stash, restore, and picker actions are serialized so a confirmation or picker cannot race another draft mutation.
 - Session tree changes, shutdown, or replacement dismiss pending TUI confirmation dialogs and pickers before resetting the extension's in-memory state and footer status. RPC confirmations are invalidated server-side; Pi `0.84.0` does not emit a separate client cancellation frame to dismiss the remote dialog.
 - A footer status shows how many drafts are currently stashed.

@@ -7,7 +7,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { existsSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join, parse } from "node:path";
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -116,25 +116,27 @@ function updateStatus(ctx: ExtensionContext, drafts: readonly string[]): void {
 	ctx.ui.setStatus("pi-stash", ctx.ui.theme.fg("accent", `📦 ${countLabel(drafts.length)}`));
 }
 
-function recoveryFile(ctx: ExtensionContext, sessionFile: string): string {
-	return join(ctx.sessionManager.getSessionDir(), `${parse(sessionFile).name}${RECOVERY_SUFFIX}`);
-}
-
-function removeSavedRecovery(ctx: ExtensionContext, drafts: readonly string[]): void {
+function removeUnusedRecoveries(ctx: ExtensionContext, drafts: readonly string[]): void {
 	const sessionFile = ctx.sessionManager.getSessionFile();
-	if (!sessionFile || !existsSync(sessionFile)) return;
-	const recovery = recoveryFile(ctx, sessionFile);
-	if (!existsSync(recovery)) return;
+	if (!sessionFile) return;
+	const savedOnDisk = existsSync(sessionFile);
+	if (!savedOnDisk && drafts.length > 0) return;
 
 	try {
-		const backup = SessionManager.open(recovery);
-		if (backup.getEntries().length !== 2) return;
-		const saved = hydrateState(SessionManager.open(sessionFile).getBranch()).drafts;
-		if (saved.length === drafts.length && saved.every((draft, index) => draft === drafts[index])) {
-			rmSync(recovery);
+		if (savedOnDisk) {
+			const saved = hydrateState(SessionManager.open(sessionFile).getBranch()).drafts;
+			if (saved.length !== drafts.length || saved.some((draft, index) => draft !== drafts[index])) return;
+		}
+
+		const dir = ctx.sessionManager.getSessionDir();
+		const prefix = `${parse(sessionFile).name}-`;
+		for (const name of readdirSync(dir)) {
+			if (!name.startsWith(prefix) || !name.endsWith(RECOVERY_SUFFIX)) continue;
+			const recovery = join(dir, name);
+			if (SessionManager.open(recovery).getEntries().length === 2) rmSync(recovery);
 		}
 	} catch {
-		// Keep the recovery session if the original cannot be verified or cleaned up.
+		// Keep recovery sessions if the original cannot be verified or cleaned up.
 	}
 }
 
@@ -142,18 +144,13 @@ function persistState(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly 
 	pi.appendEntry(STASH_ENTRY_TYPE, { drafts: [...drafts] });
 	const sessionFile = ctx.sessionManager.getSessionFile();
 	if (!sessionFile) return;
-	if (existsSync(sessionFile)) {
-		removeSavedRecovery(ctx, drafts);
+	if (existsSync(sessionFile) || drafts.length === 0) {
+		removeUnusedRecoveries(ctx, drafts);
 		return;
 	}
 
-	const recovery = recoveryFile(ctx, sessionFile);
-	if (drafts.length === 0) {
-		rmSync(recovery, { force: true });
-		return;
-	}
-
-	const temporary = `${recovery}.${randomUUID()}.tmp`;
+	const recovery = join(ctx.sessionManager.getSessionDir(), `${parse(sessionFile).name}-${randomUUID()}${RECOVERY_SUFFIX}`);
+	const temporary = `${recovery}.tmp`;
 	try {
 		writeFileSync(temporary, "", { flag: "wx", mode: 0o600 });
 		const saved = SessionManager.open(temporary, ctx.sessionManager.getSessionDir(), ctx.cwd);
@@ -466,7 +463,7 @@ export default function piStash(pi: ExtensionAPI): void {
 				pi.appendEntry(RECOVERY_OPENED_TYPE);
 			}
 		} else {
-			removeSavedRecovery(ctx, drafts);
+			removeUnusedRecoveries(ctx, drafts);
 		}
 	});
 
@@ -475,12 +472,12 @@ export default function piStash(pi: ExtensionAPI): void {
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
-		removeSavedRecovery(ctx, drafts);
+		removeUnusedRecoveries(ctx, drafts);
 		reset(ctx, []);
 	});
 
 	pi.on("agent_end", async (_event, ctx) => {
-		removeSavedRecovery(ctx, drafts);
+		removeUnusedRecoveries(ctx, drafts);
 	});
 
 	// Additive fork event; older Pi hosts simply never dispatch it. Keep stock API typing elsewhere.

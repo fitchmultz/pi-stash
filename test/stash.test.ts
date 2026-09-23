@@ -276,6 +276,43 @@ test("an opened recovery session is kept when the original session saves", async
 	}
 });
 
+test("stashing again does not overwrite an opened recovery session", async (t) => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-shared-recovery-"));
+	try {
+		const sessionDir = join(cwd, "sessions");
+		const original = SessionManager.create(cwd, sessionDir);
+		const originalHarness = createHarness((type, data) => original.appendCustomEntry(type, data));
+		const originalContext = createContext({ cwd, sessionManager: original, mode: "tui" });
+		await originalHarness.commands.get("stash")?.handler("first draft", originalContext.ctx);
+		if (existsSync(original.getSessionFile()!)) {
+			t.skip("this Pi host saves new sessions immediately");
+			return;
+		}
+
+		const opened = SessionManager.continueRecent(cwd, sessionDir);
+		const openedFile = opened.getSessionFile()!;
+		const openedHarness = createHarness((type, data) => opened.appendCustomEntry(type, data));
+		const openedContext = createContext({ cwd, sessionManager: opened, mode: "tui" });
+		await openedHarness.events.get("session_start")?.({}, openedContext.ctx);
+		await openedHarness.commands.get("stash")?.handler("other session", openedContext.ctx);
+
+		await originalHarness.commands.get("stash")?.handler("second draft", originalContext.ctx);
+		assert.deepEqual(hydrateState(SessionManager.open(openedFile).getBranch()).drafts, [
+			"other session", "first draft",
+		]);
+		const latest = SessionManager.continueRecent(cwd, sessionDir);
+		assert.notEqual(latest.getSessionFile(), openedFile);
+		assert.deepEqual(hydrateState(latest.getBranch()).drafts, ["second draft", "first draft"]);
+
+		appendAssistant(original);
+		await originalHarness.events.get("agent_end")?.({}, originalContext.ctx);
+		assert.equal(existsSync(openedFile), true);
+		assert.equal(existsSync(latest.getSessionFile()!), false);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
 test("a failed recovery write leaves the editor draft intact", async () => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-recovery-failure-"));
 	try {
