@@ -61,7 +61,6 @@ interface TestContext {
 	ui: TestUI;
 	sessionManager: {
 		getBranch(): PersistedEntry[];
-		getEntries(): PersistedEntry[];
 		getSessionDir(): string;
 		getSessionFile(): string | undefined;
 	};
@@ -108,7 +107,6 @@ function createHarness(appendEntry?: (type: string, data: AppendedEntry["data"])
 
 function createContext(options: {
 	branchEntries?: PersistedEntry[];
-	allEntries?: PersistedEntry[];
 	editorText?: string;
 	theme?: TestTheme;
 	customResult?: unknown;
@@ -125,7 +123,6 @@ function createContext(options: {
 	const statuses: StatusUpdate[] = [];
 	let editorText = options.editorText ?? "";
 	let branchEntries = options.branchEntries ?? [];
-	let allEntries = options.allEntries ?? branchEntries;
 	const customResult = options.customResult;
 	const confirmResult = options.confirmResult ?? true;
 
@@ -162,9 +159,6 @@ function createContext(options: {
 			getBranch() {
 				return branchEntries;
 			},
-			getEntries() {
-				return allEntries;
-			},
 			getSessionDir() {
 				return "";
 			},
@@ -183,9 +177,6 @@ function createContext(options: {
 		},
 		setBranchEntries(next: PersistedEntry[]) {
 			branchEntries = next;
-		},
-		setAllEntries(next: PersistedEntry[]) {
-			allEntries = next;
 		},
 	};
 }
@@ -262,6 +253,8 @@ test("an opened recovery session is kept when the original session saves", async
 
 		const recovered = SessionManager.continueRecent(cwd, sessionDir);
 		const recoveryFile = recovered.getSessionFile()!;
+		recovered.appendModelChange("openai", "test");
+		recovered.appendThinkingLevelChange("off");
 		const recoveredHarness = createHarness((type, data) => recovered.appendCustomEntry(type, data));
 		const recoveredContext = createContext({ cwd, sessionManager: recovered, mode: "tui" });
 		await recoveredHarness.events.get("session_start")?.({}, recoveredContext.ctx);
@@ -562,6 +555,38 @@ test("a system-only recovery branch does not promote an old conversation", async
 		recovery.appendCustomEntry(STASH_ENTRY_TYPE, {
 			drafts: ["old branch draft"], recoveryMtimeMs: Date.now(),
 		});
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		const newer = SessionManager.create(cwd, sessionDir);
+		appendAssistant(newer);
+
+		const opened = SessionManager.open(file);
+		opened.appendThinkingLevelChange("off");
+		const harness = createHarness((type, data) => opened.appendCustomEntry(type, data));
+		const context = createContext({ cwd, sessionManager: opened, mode: "tui" });
+		await harness.events.get("session_start")?.({}, context.ctx);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), newer.getSessionFile());
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("a conversation branched before startup thinking does not promote an old recovery", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-before-thinking-branch-"));
+	try {
+		const sessionDir = join(cwd, "sessions");
+		const file = join(sessionDir, "branched-pi-stash-recovery.jsonl");
+		mkdirSync(sessionDir, { recursive: true });
+		writeFileSync(file, "");
+		const recovery = SessionManager.open(file, sessionDir, cwd);
+		const stashId = recovery.appendCustomEntry(STASH_ENTRY_TYPE, {
+			drafts: ["old draft"], recoveryMtimeMs: Date.now(),
+		});
+		recovery.appendModelChange("openai", "startup-model");
+		recovery.appendThinkingLevelChange("off");
+		recovery.branch(stashId);
+		recovery.appendMessage({ role: "user", content: [{ type: "text", text: "Hello" }], timestamp: Date.now() });
+		appendAssistant(recovery);
+		assert.equal(recovery.getBranch().some((entry) => entry.type === "thinking_level_change"), false);
 		await new Promise((resolve) => setTimeout(resolve, 20));
 		const newer = SessionManager.create(cwd, sessionDir);
 		appendAssistant(newer);
@@ -974,7 +999,6 @@ test("/stash preserves explicit whitespace exactly", async () => {
 	const harness = createHarness();
 	const context = createContext({
 		branchEntries: [],
-		allEntries: [stashSnapshot("ignored global draft")],
 	});
 
 	await harness.events.get("session_start")?.({}, context.ctx);
@@ -991,7 +1015,6 @@ test("stash state rehydrates from the current branch on session start and tree n
 	const harness = createHarness();
 	const context = createContext({
 		branchEntries: [stashSnapshot("branch draft")],
-		allEntries: [stashSnapshot("branch draft"), stashSnapshot("other-branch newest")],
 	});
 
 	await harness.events.get("session_start")?.({}, context.ctx);
@@ -1016,7 +1039,6 @@ test("RPC-like restore falls back to the latest draft when the custom picker is 
 	const harness = createHarness();
 	const context = createContext({
 		branchEntries: [],
-		allEntries: [],
 		theme: undefined,
 		customResult: undefined,
 		editorText: "",
@@ -1041,7 +1063,6 @@ test("RPC-like restore does not replace editor text when the destructive confirm
 	const harness = createHarness();
 	const context = createContext({
 		branchEntries: [],
-		allEntries: [],
 		theme: undefined,
 		customResult: undefined,
 		confirmResult: false,
@@ -1064,7 +1085,6 @@ test("RPC-like stash-list falls back to a textual summary when the custom picker
 	const harness = createHarness();
 	const context = createContext({
 		branchEntries: [],
-		allEntries: [],
 		theme: undefined,
 		customResult: undefined,
 	});
@@ -1305,7 +1325,7 @@ test("checkpoint refuses a live picker without cancelling it", async () => {
 
 test("/stash ignores whitespace-only explicit text", async () => {
 	const harness = createHarness();
-	const context = createContext({ branchEntries: [], allEntries: [] });
+	const context = createContext({ branchEntries: [] });
 
 	await harness.commands.get("stash")?.handler("   ", context.ctx);
 

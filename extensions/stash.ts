@@ -11,7 +11,7 @@ import { appendFileSync, existsSync, readFileSync, readdirSync, renameSync, rmSy
 import { join, parse } from "node:path";
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { buildSessionContext, DynamicBorder, keyHint, parseSessionEntries, rawKeyHint, SessionManager, sessionEntryToContextMessages } from "@earendil-works/pi-coding-agent";
+import { DynamicBorder, keyHint, parseSessionEntries, rawKeyHint, SessionManager, sessionEntryToContextMessages } from "@earendil-works/pi-coding-agent";
 import { Container, Key, matchesKey, type SelectItem, SelectList, Text } from "@earendil-works/pi-tui";
 import {
 	clampSelectedIndex,
@@ -489,8 +489,12 @@ export default function piStash(pi: ExtensionAPI): void {
 		reset(ctx, hydrateState(ctx.sessionManager.getBranch()).drafts);
 		const file = ctx.sessionManager.getSessionFile();
 		if (event.reason === "reload" || !file?.endsWith(RECOVERY_SUFFIX)) return;
-		if (buildSessionContext(ctx.sessionManager.getEntries(), ctx.sessionManager.getLeafId()).messages
-			.some((message) => message.role !== "system")) return;
+		// Pi cannot append startup settings when a thinking entry precedes conversation on this branch.
+		let hasThinking = false;
+		for (const entry of ctx.sessionManager.getBranch()) {
+			if (entry.type === "thinking_level_change") hasThinking = true;
+			if (hasThinking && sessionEntryToContextMessages(entry).some((message) => message.role !== "system")) return;
+		}
 		const entries = parseSessionEntries(readFileSync(file, "utf8"));
 
 		// Pi appends startup model settings to message-empty sessions before this event.
