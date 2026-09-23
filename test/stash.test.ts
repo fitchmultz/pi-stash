@@ -453,7 +453,7 @@ test("clearing the unsaved original keeps an opened recovery separate", async (t
 	}
 });
 
-test("a late recovery startup cannot undo an original clear", async (t) => {
+test("a late recovery startup respects an original clear and later edits", async (t) => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-late-recovery-start-"));
 	try {
 		const sessionDir = join(cwd, "sessions");
@@ -462,7 +462,7 @@ test("a late recovery startup cannot undo an original clear", async (t) => {
 		const context = createContext({
 			cwd, sessionManager: original, mode: "tui", customResult: { action: "clear" },
 		});
-		await harness.commands.get("stash")?.handler("discard me", context.ctx);
+		await harness.commands.get("stash")?.handler("keep me", context.ctx);
 		if (existsSync(original.getSessionFile()!)) {
 			t.skip("this Pi host saves new sessions immediately");
 			return;
@@ -470,10 +470,10 @@ test("a late recovery startup cannot undo an original clear", async (t) => {
 
 		const opening = SessionManager.continueRecent(cwd, sessionDir);
 		await harness.commands.get("stash-list")?.handler("", context.ctx);
-		const emptyRecovery = SessionManager.continueRecent(cwd, sessionDir).getSessionFile();
+		const emptyRecovery = SessionManager.continueRecent(cwd, sessionDir).getSessionFile()!;
 		opening.appendModelChange("openai", "test");
 		opening.appendThinkingLevelChange("off");
-		const future = new Date(statSync(emptyRecovery!).mtimeMs + 1_000);
+		const future = new Date(statSync(emptyRecovery).mtimeMs + 1_000);
 		utimesSync(opening.getSessionFile()!, future, future);
 		const openingHarness = createHarness((type, data) => opening.appendCustomEntry(type, data));
 		const openingContext = createContext({ cwd, sessionManager: opening, mode: "tui" });
@@ -482,8 +482,26 @@ test("a late recovery startup cannot undo an original clear", async (t) => {
 
 		appendAssistant(original);
 		assert.deepEqual(hydrateState(SessionManager.open(original.getSessionFile()!).getBranch()).drafts, []);
-		assert.equal(existsSync(emptyRecovery!), true);
+		assert.equal(existsSync(emptyRecovery), true);
 		assert.deepEqual(hydrateState(SessionManager.continueRecent(cwd, sessionDir).getBranch()).drafts, []);
+
+		const openingFile = opening.getSessionFile()!;
+		opening.appendThinkingLevelChange("high");
+		const later = new Date(Math.max(
+			statSync(emptyRecovery).mtimeMs, statSync(original.getSessionFile()!).mtimeMs,
+		) + 1_000);
+		utimesSync(openingFile, later, later);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), openingFile);
+		await openingHarness.events.get("session_shutdown")?.({}, openingContext.ctx);
+
+		const reopened = SessionManager.open(openingFile);
+		reopened.appendModelChange("openai", "test");
+		reopened.appendThinkingLevelChange("off");
+		const reopenedHarness = createHarness((type, data) => reopened.appendCustomEntry(type, data));
+		const reopenedContext = createContext({ cwd, sessionManager: reopened, mode: "tui" });
+		await reopenedHarness.events.get("session_start")?.({}, reopenedContext.ctx);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), openingFile);
+		assert.deepEqual(hydrateState(reopened.getBranch()).drafts, ["keep me"]);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}

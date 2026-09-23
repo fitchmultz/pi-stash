@@ -56,6 +56,7 @@ type DraftPickerResult =
 
 const INTERACTION_CANCELLED = Symbol("interaction-cancelled");
 const RECOVERY_SUFFIX = "-pi-stash-recovery.jsonl";
+const RECOVERY_MTIME_TYPE = "pi-stash-recovery-mtime";
 
 interface Interaction {
 	readonly cancelled: boolean;
@@ -457,12 +458,20 @@ export default function piStash(pi: ExtensionAPI): void {
 		// Pi appends startup model settings to message-empty sessions before this event.
 		for (let index = entries.length - 1; index >= 0; index--) {
 			const entry = entries[index];
-			if (entry.type !== "custom" || entry.customType !== STASH_ENTRY_TYPE) continue;
+			if (entry.type !== "custom") continue;
 			const snapshot = entry.data as { drafts?: unknown; recoveryMtimeMs?: unknown } | undefined;
-			if (!Array.isArray(snapshot?.drafts) || !snapshot.drafts.every((draft) => typeof draft === "string")) continue;
-			const recorded = snapshot.recoveryMtimeMs;
-			// Older recovery files have only the entry timestamp, without the sub-millisecond order.
-			const mtimeMs = typeof recorded === "number" && Number.isFinite(recorded) ? recorded : Date.parse(entry.timestamp);
+			const recorded = snapshot?.recoveryMtimeMs;
+			let mtimeMs: number;
+			if (entry.customType === RECOVERY_MTIME_TYPE) {
+				if (typeof recorded !== "number" || !Number.isFinite(recorded)) continue;
+				mtimeMs = recorded;
+			} else if (entry.customType === STASH_ENTRY_TYPE) {
+				if (!Array.isArray(snapshot?.drafts) || !snapshot.drafts.every((draft) => typeof draft === "string")) continue;
+				// Older recovery files have only the entry timestamp, without the sub-millisecond order.
+				mtimeMs = typeof recorded === "number" && Number.isFinite(recorded) ? recorded : Date.parse(entry.timestamp);
+			} else {
+				continue;
+			}
 			if (Number.isFinite(mtimeMs) && mtimeMs >= 0) {
 				utimesSync(file, statSync(file).atime, mtimeMs / 1000);
 			}
@@ -475,6 +484,15 @@ export default function piStash(pi: ExtensionAPI): void {
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
+		const file = ctx.sessionManager.getSessionFile();
+		if (file?.endsWith(RECOVERY_SUFFIX) && existsSync(file) &&
+			buildSessionContext(ctx.sessionManager.getEntries(), ctx.sessionManager.getLeafId()).messages.length === 0) {
+			// ponytail: Official Pi has no pre-start hook. Clean shutdown preserves native edits;
+			// abrupt exits may fall back to the last stash until custom entries save eagerly.
+			const { atime, mtimeMs } = statSync(file);
+			pi.appendEntry(RECOVERY_MTIME_TYPE, { recoveryMtimeMs: mtimeMs });
+			utimesSync(file, atime, mtimeMs / 1000);
+		}
 		reset(ctx, []);
 	});
 
