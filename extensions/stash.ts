@@ -116,11 +116,15 @@ function updateStatus(ctx: ExtensionContext, drafts: readonly string[]): void {
 	ctx.ui.setStatus("pi-stash", ctx.ui.theme.fg("accent", `📦 ${countLabel(drafts.length)}`));
 }
 
-function removeUnusedRecoveries(ctx: ExtensionContext, drafts: readonly string[], keep?: string): void {
+function removeUnusedRecoveries(
+	ctx: ExtensionContext,
+	drafts: readonly string[],
+	unsavedUpdate?: { keep?: string },
+): void {
 	const sessionFile = ctx.sessionManager.getSessionFile();
 	if (!sessionFile) return;
 	const savedOnDisk = existsSync(sessionFile);
-	if (!savedOnDisk && drafts.length > 0 && !keep) return;
+	if (!savedOnDisk && !unsavedUpdate) return;
 
 	try {
 		const dir = ctx.sessionManager.getSessionDir();
@@ -133,10 +137,20 @@ function removeUnusedRecoveries(ctx: ExtensionContext, drafts: readonly string[]
 			if (saved.length !== drafts.length || saved.some((draft, index) => draft !== drafts[index])) return;
 		}
 
+		const activeEntryIds = savedOnDisk ? undefined : new Set(ctx.sessionManager.getBranch().map((entry) => entry.id));
 		for (const name of recoveries) {
 			const recovery = join(dir, name);
-			if (recovery === keep) continue;
-			if (SessionManager.open(recovery).getEntries().length === 2) rmSync(recovery);
+			if (recovery === unsavedUpdate?.keep) continue;
+			const entries = SessionManager.open(recovery).getEntries();
+			if (entries.length !== 2) continue;
+			if (activeEntryIds) {
+				const snapshot = entries[1];
+				const sourceEntryId = snapshot.type === "custom" && snapshot.customType === STASH_ENTRY_TYPE
+					? (snapshot.data as { sourceEntryId?: string } | undefined)?.sourceEntryId
+					: undefined;
+				if (!sourceEntryId || !activeEntryIds.has(sourceEntryId)) continue;
+			}
+			rmSync(recovery);
 		}
 	} catch {
 		// Keep recovery sessions if the original cannot be verified or cleaned up.
@@ -147,8 +161,12 @@ function persistState(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly 
 	pi.appendEntry(STASH_ENTRY_TYPE, { drafts: [...drafts] });
 	const sessionFile = ctx.sessionManager.getSessionFile();
 	if (!sessionFile) return;
-	if (existsSync(sessionFile) || drafts.length === 0) {
+	if (existsSync(sessionFile)) {
 		removeUnusedRecoveries(ctx, drafts);
+		return;
+	}
+	if (drafts.length === 0) {
+		removeUnusedRecoveries(ctx, drafts, {});
 		return;
 	}
 
@@ -158,9 +176,12 @@ function persistState(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly 
 		writeFileSync(temporary, "", { flag: "wx", mode: 0o600 });
 		const saved = SessionManager.open(temporary, ctx.sessionManager.getSessionDir(), ctx.cwd);
 		saved.appendSessionInfo("Stashed drafts");
-		saved.appendCustomEntry(STASH_ENTRY_TYPE, { drafts: [...drafts] });
+		saved.appendCustomEntry(STASH_ENTRY_TYPE, {
+			drafts: [...drafts],
+			sourceEntryId: ctx.sessionManager.getLeafId(),
+		});
 		renameSync(temporary, recovery);
-		removeUnusedRecoveries(ctx, drafts, recovery);
+		removeUnusedRecoveries(ctx, drafts, { keep: recovery });
 	} finally {
 		rmSync(temporary, { force: true });
 	}

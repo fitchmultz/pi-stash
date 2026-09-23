@@ -342,6 +342,37 @@ test("clearing a recovered stash does not resurrect an older backup", async (t) 
 	}
 });
 
+test("leaving an unsaved stash branch does not delete its recovery", async (t) => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-unsaved-branch-"));
+	try {
+		const sessionDir = join(cwd, "sessions");
+		const manager = SessionManager.create(cwd, sessionDir);
+		const earlier = manager.appendModelChange("openai", "test");
+		const harness = createHarness((type, data) => manager.appendCustomEntry(type, data));
+		const context = createContext({ cwd, sessionManager: manager, mode: "tui" });
+		await harness.commands.get("stash")?.handler("keep this draft", context.ctx);
+		if (existsSync(manager.getSessionFile()!)) {
+			t.skip("this Pi host saves new sessions immediately");
+			return;
+		}
+
+		const recovery = SessionManager.continueRecent(cwd, sessionDir).getSessionFile()!;
+		manager.branch(earlier);
+		await harness.events.get("session_tree")?.({}, context.ctx);
+		await harness.events.get("agent_end")?.({}, context.ctx);
+		assert.equal(existsSync(recovery), true);
+		await harness.commands.get("stash")?.handler("other branch draft", context.ctx);
+		assert.equal(existsSync(recovery), true);
+		const other = SessionManager.continueRecent(cwd, sessionDir);
+		assert.deepEqual(hydrateState(other.getBranch()).drafts, ["other branch draft"]);
+		await harness.events.get("session_shutdown")?.({}, context.ctx);
+		assert.equal(existsSync(recovery), true);
+		assert.deepEqual(hydrateState(SessionManager.open(recovery).getBranch()).drafts, ["keep this draft"]);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
 test("a failed recovery write leaves the editor draft intact", async () => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-recovery-failure-"));
 	try {
