@@ -45,18 +45,12 @@ function run(args, input) {
 
 try {
 	run(["install", packageRoot, "--approve"]);
+	const args = [
+		"--mode", "rpc", "--approve", "--no-skills", "--no-prompt-templates",
+		"--no-themes", "--no-context-files", "--no-builtin-tools",
+	];
 	const stdout = run(
-		[
-			"--mode",
-			"rpc",
-			"--no-session",
-			"--approve",
-			"--no-skills",
-			"--no-prompt-templates",
-			"--no-themes",
-			"--no-context-files",
-			"--no-builtin-tools",
-		],
+		args,
 		[
 			{ id: "stash", type: "prompt", message: "/stash ci-draft" },
 			{ id: "list", type: "prompt", message: "/stash-list" },
@@ -78,6 +72,18 @@ try {
 		[["stash", true], ["list", true]],
 	);
 	assert.ok(!events.some((event) => event.type === "agent_start" || event.type === "extension_error"), stdout);
+
+	const resumed = run([...args, "-c"], `${JSON.stringify({ id: "resume", type: "prompt", message: "/stash-list" })}\n`);
+	const resumedEvents = resumed.trim().split("\n").map((line) => JSON.parse(line));
+	assert.ok(resumedEvents.some((event) =>
+		event.type === "extension_ui_request" &&
+		event.method === "notify" &&
+		event.message?.includes("1. ci-draft")
+	), resumed);
+	assert.deepEqual(
+		resumedEvents.filter((event) => event.type === "response").map((event) => [event.id, event.success]),
+		[["resume", true]],
+	);
 } finally {
 	rmSync(home, { recursive: true, force: true });
 }

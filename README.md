@@ -38,7 +38,7 @@ npm run smoke:package # isolated pi install/load smoke
 npm run validate      # ci + Node 22.19 check + audit + pack dry-run + package smoke
 ```
 
-The smoke test resolves the installed host's actual `bin.pi` entry (or `PI_HOST_CLI` in qualification) and uses an isolated HOME/agentDir. `PI_COMPAT_EXPECTED_VERSION` and `PI_COMPAT_EXPECTED_PACKAGE_DIR` assert the selected host. The standalone `PI_BIN` override remains available outside compatibility jobs. GitHub PR checks qualify the declared official Pi version and the maintained fork on Node 22.19; Node 26 is an advisory check. They exercise stash and list through the real CLI, but do not trigger a native checkpoint or test Windows. No production build or `prepare` is needed for this package; Pi loads the shipped TypeScript directly.
+The smoke test resolves the installed host's actual `bin.pi` entry (or `PI_HOST_CLI` in qualification) and uses an isolated HOME/agentDir. `PI_COMPAT_EXPECTED_VERSION` and `PI_COMPAT_EXPECTED_PACKAGE_DIR` assert the selected host. The standalone `PI_BIN` override remains available outside compatibility jobs. GitHub PR checks qualify the declared official Pi version and the maintained fork on Node 22.19; Node 26 is an advisory check. They exercise stash, list, and restart/resume through the real CLI, but do not trigger a native checkpoint or test Windows. No production build or `prepare` is needed for this package; Pi loads the shipped TypeScript directly.
 
 ## Design
 
@@ -49,6 +49,7 @@ The smoke test resolves the installed host's actual `bin.pi` entry (or `PI_HOST_
 - Restores use `pasteToEditor()` when the editor already has text, so retrieval does not destroy whatever is currently in the box.
 - Drafts are kept as a small LIFO stack, so repeated stashes still work naturally.
 - The current stash stack is persisted in session metadata, so `/reload`, session resume, and `/tree` branch navigation keep drafts aligned with the active branch.
+- On Pi versions that wait for the first assistant reply before saving a new session, early stashes create a resumable **Stashed drafts** session. `pi -c` or `/resume` can recover it after a restart. Pi-stash removes an unused recovery session once the original session saves the same drafts; a recovery session you opened remains yours.
 - Overlapping stash, restore, and picker actions are serialized so a confirmation or picker cannot race another draft mutation.
 - Session tree changes, shutdown, or replacement dismiss pending TUI confirmation dialogs and pickers before resetting the extension's in-memory state and footer status. RPC confirmations are invalidated server-side; Pi `0.84.0` does not emit a separate client cancellation frame to dismiss the remote dialog.
 - A footer status shows how many drafts are currently stashed.

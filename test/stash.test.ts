@@ -7,11 +7,14 @@
  */
 
 import assert from "node:assert/strict";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
-import { initTheme } from "@earendil-works/pi-coding-agent";
+import { initTheme, SessionManager } from "@earendil-works/pi-coding-agent";
 import piStash from "../extensions/stash.ts";
-import { STASH_ENTRY_TYPE, type PersistedEntry } from "../extensions/state.ts";
+import { hydrateState, STASH_ENTRY_TYPE, type PersistedEntry } from "../extensions/state.ts";
 
 interface AppendedEntry {
 	type: string;
@@ -53,10 +56,13 @@ interface TestUI {
 interface TestContext {
 	mode: "tui" | "rpc" | "json" | "print";
 	hasUI: boolean;
+	cwd: string;
 	ui: TestUI;
 	sessionManager: {
 		getBranch(): PersistedEntry[];
 		getEntries(): PersistedEntry[];
+		getSessionDir(): string;
+		getSessionFile(): string | undefined;
 	};
 }
 
@@ -74,7 +80,7 @@ interface RegisteredEvent {
 	(event: unknown, ctx: TestContext): unknown;
 }
 
-function createHarness() {
+function createHarness(appendEntry?: (type: string, data: AppendedEntry["data"]) => void) {
 	const commands = new Map<string, RegisteredCommand>();
 	const shortcuts = new Map<string, RegisteredShortcut>();
 	const events = new Map<string, RegisteredEvent>();
@@ -91,6 +97,7 @@ function createHarness() {
 			shortcuts.set(name, options);
 		},
 		appendEntry(type: string, data: AppendedEntry["data"]) {
+			appendEntry?.(type, data);
 			appended.push({ type, data });
 		},
 	} as never);
@@ -109,6 +116,8 @@ function createContext(options: {
 	confirm?: (title: string, message: string, options?: TestDialogOptions) => Promise<boolean>;
 	hasUI?: boolean;
 	mode?: "tui" | "rpc" | "json" | "print";
+	cwd?: string;
+	sessionManager?: TestContext["sessionManager"];
 }) {
 	const notifications: Notification[] = [];
 	const statuses: StatusUpdate[] = [];
@@ -121,6 +130,7 @@ function createContext(options: {
 	const ctx: TestContext = {
 		mode: options.mode ?? (options.hasUI === false ? "print" : options.theme ? "tui" : "rpc"),
 		hasUI: options.hasUI ?? true,
+		cwd: options.cwd ?? process.cwd(),
 		ui: {
 			theme: options.theme ?? { fg: (_name, value) => value, bold: (value) => value },
 			notify(message, type) {
@@ -145,12 +155,18 @@ function createContext(options: {
 				return options.custom ? options.custom<T>(renderer as never) : (customResult as T | undefined);
 			},
 		},
-		sessionManager: {
+		sessionManager: options.sessionManager ?? {
 			getBranch() {
 				return branchEntries;
 			},
 			getEntries() {
 				return allEntries;
+			},
+			getSessionDir() {
+				return "";
+			},
+			getSessionFile() {
+				return undefined;
 			},
 		},
 	};
@@ -178,6 +194,134 @@ function stashSnapshot(...drafts: string[]): PersistedEntry {
 		data: { drafts },
 	};
 }
+
+function appendAssistant(manager: SessionManager): void {
+	manager.appendMessage({
+		role: "assistant",
+		content: [{ type: "text", text: "Hello" }],
+		api: "openai-completions",
+		provider: "openai",
+		model: "test",
+		usage: {
+			input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		},
+		stopReason: "stop",
+		timestamp: Date.now(),
+	});
+}
+
+test("a fresh-session stash survives restarting before the first assistant reply", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-fresh-session-"));
+	try {
+		const sessionDir = join(cwd, "sessions");
+		const manager = SessionManager.create(cwd, sessionDir);
+		const harness = createHarness((type, data) => manager.appendCustomEntry(type, data));
+		const context = createContext({
+			cwd,
+			sessionManager: manager,
+			mode: "tui",
+			editorText: "draft I must not lose",
+		});
+
+		await harness.events.get("session_start")?.({}, context.ctx);
+		await harness.shortcuts.get("ctrl+shift+s")?.handler(context.ctx);
+		await harness.commands.get("stash")?.handler("second draft", context.ctx);
+
+		assert.equal(context.editorText, "");
+		const originalFile = manager.getSessionFile()!;
+		const neededRecovery = !existsSync(originalFile);
+		const resumed = SessionManager.continueRecent(cwd, sessionDir);
+		const expected = ["second draft", "draft I must not lose"];
+		assert.deepEqual(hydrateState(resumed.getBranch()).drafts, expected);
+		assert.equal(resumed.getSessionFile() !== originalFile, neededRecovery);
+
+		appendAssistant(manager);
+		await harness.events.get("agent_end")?.({}, context.ctx);
+		if (neededRecovery) assert.equal(existsSync(resumed.getSessionFile()!), false);
+		assert.deepEqual(hydrateState(SessionManager.open(originalFile).getBranch()).drafts, expected);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("an opened recovery session is kept when the original session saves", async (t) => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-open-recovery-"));
+	try {
+		const sessionDir = join(cwd, "sessions");
+		const manager = SessionManager.create(cwd, sessionDir);
+		const harness = createHarness((type, data) => manager.appendCustomEntry(type, data));
+		const context = createContext({ cwd, sessionManager: manager, mode: "tui" });
+		await harness.commands.get("stash")?.handler("original draft", context.ctx);
+		if (existsSync(manager.getSessionFile()!)) {
+			t.skip("this Pi host saves new sessions immediately");
+			return;
+		}
+
+		const recovered = SessionManager.continueRecent(cwd, sessionDir);
+		const recoveryFile = recovered.getSessionFile()!;
+		const recoveredHarness = createHarness((type, data) => recovered.appendCustomEntry(type, data));
+		const recoveredContext = createContext({ cwd, sessionManager: recovered, mode: "tui" });
+		await recoveredHarness.events.get("session_start")?.({}, recoveredContext.ctx);
+
+		appendAssistant(manager);
+		await harness.events.get("agent_end")?.({}, context.ctx);
+		assert.equal(existsSync(recoveryFile), true);
+		await recoveredHarness.commands.get("stash")?.handler("independent draft", recoveredContext.ctx);
+		assert.deepEqual(hydrateState(SessionManager.open(recoveryFile).getBranch()).drafts, [
+			"independent draft", "original draft",
+		]);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("a failed recovery write leaves the editor draft intact", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-recovery-failure-"));
+	try {
+		const sessionDir = join(cwd, "sessions");
+		const manager = SessionManager.create(cwd, sessionDir);
+		rmSync(sessionDir, { recursive: true });
+		writeFileSync(sessionDir, "not a directory");
+		const harness = createHarness((type, data) => manager.appendCustomEntry(type, data));
+		const context = createContext({
+			cwd, sessionManager: manager, mode: "tui", editorText: "keep this draft",
+		});
+
+		await harness.events.get("session_start")?.({}, context.ctx);
+		await assert.rejects(harness.shortcuts.get("ctrl+shift+s")!.handler(context.ctx), { code: "ENOTDIR" });
+		assert.equal(context.editorText, "keep this draft");
+
+		context.ctx.ui.setEditorText("");
+		await assert.rejects(harness.commands.get("stash")!.handler("keep explicit text", context.ctx), { code: "ENOTDIR" });
+		assert.equal(context.editorText, "keep explicit text");
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("clearing an early stash does not resurrect it on restart", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-clear-recovery-"));
+	try {
+		const sessionDir = join(cwd, "sessions");
+		const manager = SessionManager.create(cwd, sessionDir);
+		const harness = createHarness((type, data) => manager.appendCustomEntry(type, data));
+		const context = createContext({
+			cwd, sessionManager: manager, mode: "tui", customResult: { action: "clear" },
+		});
+
+		await harness.commands.get("stash")?.handler("discard me", context.ctx);
+		const neededRecovery = !existsSync(manager.getSessionFile()!);
+		const recovery = SessionManager.continueRecent(cwd, sessionDir).getSessionFile()!;
+		assert.equal(existsSync(recovery), true);
+
+		await harness.commands.get("stash-list")?.handler("", context.ctx);
+		if (neededRecovery) assert.equal(existsSync(recovery), false);
+		assert.deepEqual(hydrateState(SessionManager.continueRecent(cwd, sessionDir).getBranch()).drafts, []);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
 
 test("/stash preserves explicit whitespace exactly", async () => {
 	const harness = createHarness();
