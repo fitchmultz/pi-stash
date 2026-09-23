@@ -63,7 +63,7 @@
     "prepublishOnly": "npm run validate",
     "test:node22": "npm run build:test && cd .tmp/test-dist && npx -y node@22.19.0 --test"
   },
-  "packageManager": "npm@11.16.0",
+  "packageManager": "npm@11.20.0",
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {
       "optional": true
