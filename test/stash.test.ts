@@ -300,7 +300,7 @@ test("stashing again does not overwrite an opened recovery session", async (t) =
 		await openedHarness.events.get("session_start")?.({}, openedContext.ctx);
 		await openedHarness.commands.get("stash")?.handler("other session", openedContext.ctx);
 
-		const future = new Date(Date.now() + 1_000);
+		const future = (Date.now() + 1_000.25) / 1000;
 		utimesSync(openedFile, future, future);
 		await originalHarness.commands.get("stash")?.handler("second draft", originalContext.ctx);
 		assert.deepEqual(hydrateState(SessionManager.open(openedFile).getBranch()).drafts, [
@@ -308,12 +308,16 @@ test("stashing again does not overwrite an opened recovery session", async (t) =
 		]);
 		const latest = SessionManager.continueRecent(cwd, sessionDir);
 		assert.notEqual(latest.getSessionFile(), openedFile);
-		assert.ok(statSync(latest.getSessionFile()!).mtimeMs > statSync(openedFile).mtimeMs);
+		const openedStat = statSync(openedFile);
+		const latestStat = statSync(latest.getSessionFile()!);
+		assert.ok(latestStat.mtimeMs > openedStat.mtimeMs);
+		assert.ok(latestStat.mtime.getTime() > openedStat.mtime.getTime());
+		assert.ok(latestStat.mtimeMs - openedStat.mtimeMs < 1.01);
 		assert.deepEqual(hydrateState(latest.getBranch()).drafts, ["second draft", "first draft"]);
 
 		const other = SessionManager.create(cwd, sessionDir);
 		appendAssistant(other);
-		const later = (statSync(openedFile).mtimeMs + 0.5) / 1000;
+		const later = (latestStat.mtimeMs + 0.5) / 1000;
 		utimesSync(other.getSessionFile()!, later, later);
 		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), other.getSessionFile());
 
