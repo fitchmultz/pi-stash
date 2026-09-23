@@ -520,8 +520,9 @@ export default function piStash(pi: ExtensionAPI): void {
 		if (mtimeMs === undefined) return;
 		// A different window may have written a newer conversation on another branch.
 		for (const entry of entries) {
-			if (entry.type === "session" || (entry.type === "message" && entry.message.role === "system") ||
-				sessionEntryToContextMessages(entry).length === 0) continue;
+			if (entry.type === "session" || (entry.type === "message" && entry.message.role === "system")) continue;
+			// A context edit changes the conversation without projecting a message itself.
+			if ((entry.type as string) !== "context_edit" && sessionEntryToContextMessages(entry).length === 0) continue;
 			const changed = localRecoveryMtime(Date.parse(entry.timestamp));
 			if (changed !== undefined) mtimeMs = Math.max(mtimeMs, changed + 1.01);
 		}

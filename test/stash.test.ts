@@ -638,6 +638,17 @@ test("omitted conversation entries do not promote an old recovery", async (t) =>
 		const context = createContext({ cwd, sessionManager: opened, mode: "tui" });
 		await harness.events.get("session_start")?.({}, context.ctx);
 		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), newer.getSessionFile());
+
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		edit.call(recovery, userId, null);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), file);
+		const reopened = SessionManager.open(file);
+		reopened.appendModelChange("openai", "startup-model");
+		reopened.appendThinkingLevelChange("off");
+		const reopenedHarness = createHarness((type, data) => reopened.appendCustomEntry(type, data));
+		const reopenedContext = createContext({ cwd, sessionManager: reopened, mode: "tui" });
+		await reopenedHarness.events.get("session_start")?.({}, reopenedContext.ctx);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), file);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}
