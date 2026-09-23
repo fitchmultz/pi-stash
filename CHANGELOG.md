@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Fixed
+- Preserve stashes made before a new Pi session is saved, so restarting before the first assistant reply no longer loses the draft.
+
 ## [0.2.0] - 2026-08-06
 
 ### Changed

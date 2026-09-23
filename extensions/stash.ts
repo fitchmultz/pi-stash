@@ -6,8 +6,12 @@
  * Invariants/Assumptions: Drafts are restored newest-first by default, blank drafts are never stashed, and non-TUI clients use confirmation or summary flows.
  */
 
+import { randomUUID } from "node:crypto";
+import { existsSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { join, parse } from "node:path";
+
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { DynamicBorder, keyHint, rawKeyHint } from "@earendil-works/pi-coding-agent";
+import { DynamicBorder, keyHint, rawKeyHint, SessionManager } from "@earendil-works/pi-coding-agent";
 import { Container, Key, matchesKey, type SelectItem, SelectList, Text } from "@earendil-works/pi-tui";
 import {
 	clampSelectedIndex,
@@ -51,6 +55,8 @@ type DraftPickerResult =
 	| DraftPickerResultUnsupported;
 
 const INTERACTION_CANCELLED = Symbol("interaction-cancelled");
+const RECOVERY_SUFFIX = "-pi-stash-recovery.jsonl";
+const RECOVERY_OPENED_TYPE = "pi-stash-recovery-opened";
 
 interface Interaction {
 	readonly cancelled: boolean;
@@ -110,8 +116,53 @@ function updateStatus(ctx: ExtensionContext, drafts: readonly string[]): void {
 	ctx.ui.setStatus("pi-stash", ctx.ui.theme.fg("accent", `📦 ${countLabel(drafts.length)}`));
 }
 
-function persistState(pi: ExtensionAPI, drafts: readonly string[]): void {
+function recoveryFile(ctx: ExtensionContext, sessionFile: string): string {
+	return join(ctx.sessionManager.getSessionDir(), `${parse(sessionFile).name}${RECOVERY_SUFFIX}`);
+}
+
+function removeSavedRecovery(ctx: ExtensionContext, drafts: readonly string[]): void {
+	const sessionFile = ctx.sessionManager.getSessionFile();
+	if (!sessionFile || !existsSync(sessionFile)) return;
+	const recovery = recoveryFile(ctx, sessionFile);
+	if (!existsSync(recovery)) return;
+
+	try {
+		const backup = SessionManager.open(recovery);
+		if (backup.getEntries().length !== 2) return;
+		const saved = hydrateState(SessionManager.open(sessionFile).getBranch()).drafts;
+		if (saved.length === drafts.length && saved.every((draft, index) => draft === drafts[index])) {
+			rmSync(recovery);
+		}
+	} catch {
+		// Keep the recovery session if the original cannot be verified or cleaned up.
+	}
+}
+
+function persistState(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly string[]): void {
 	pi.appendEntry(STASH_ENTRY_TYPE, { drafts: [...drafts] });
+	const sessionFile = ctx.sessionManager.getSessionFile();
+	if (!sessionFile) return;
+	if (existsSync(sessionFile)) {
+		removeSavedRecovery(ctx, drafts);
+		return;
+	}
+
+	const recovery = recoveryFile(ctx, sessionFile);
+	if (drafts.length === 0) {
+		rmSync(recovery, { force: true });
+		return;
+	}
+
+	const temporary = `${recovery}.${randomUUID()}.tmp`;
+	try {
+		writeFileSync(temporary, "", { flag: "wx", mode: 0o600 });
+		const saved = SessionManager.open(temporary, ctx.sessionManager.getSessionDir(), ctx.cwd);
+		saved.appendSessionInfo("Stashed drafts");
+		saved.appendCustomEntry(STASH_ENTRY_TYPE, { drafts: [...drafts] });
+		renameSync(temporary, recovery);
+	} finally {
+		rmSync(temporary, { force: true });
+	}
 }
 
 function ensureEditor(ctx: ExtensionContext, action: string): boolean {
@@ -122,7 +173,7 @@ function ensureEditor(ctx: ExtensionContext, action: string): boolean {
 
 function stashDraft(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly string[], draft: string): string[] {
 	const nextDrafts = pushDraft(drafts, draft, MAX_STASHED_DRAFTS);
-	persistState(pi, nextDrafts);
+	persistState(pi, ctx, nextDrafts);
 	updateStatus(ctx, nextDrafts);
 
 	const suffix = drafts.length >= MAX_STASHED_DRAFTS ? " Oldest draft dropped." : "";
@@ -139,8 +190,9 @@ function stashEditor(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly s
 		return [...drafts];
 	}
 
+	const nextDrafts = stashDraft(pi, ctx, drafts, draft);
 	ctx.ui.setEditorText("");
-	return stashDraft(pi, ctx, drafts, draft);
+	return nextDrafts;
 }
 
 function insertDraftIntoEditor(ctx: ExtensionContext, draft: string): void {
@@ -184,14 +236,14 @@ async function restoreDraftAt(
 	} else {
 		insertDraftIntoEditor(ctx, draft);
 	}
-	persistState(pi, remaining);
+	persistState(pi, ctx, remaining);
 	updateStatus(ctx, remaining);
 	ctx.ui.notify(`Restored draft: ${previewDraft(draft)}`, "info");
 	return remaining;
 }
 
 function clearDrafts(pi: ExtensionAPI, ctx: ExtensionContext): string[] {
-	persistState(pi, []);
+	persistState(pi, ctx, []);
 	updateStatus(ctx, []);
 	ctx.ui.notify("Cleared stashed drafts", "info");
 	return [];
@@ -344,7 +396,7 @@ async function manageDrafts(
 		}
 
 		nextDrafts = removed.remaining;
-		persistState(pi, nextDrafts);
+		persistState(pi, ctx, nextDrafts);
 		updateStatus(ctx, nextDrafts);
 		ctx.ui.notify(`Deleted stashed draft: ${previewDraft(removed.draft)}`, "info");
 		selectedIndex = removed.nextIndex;
@@ -408,6 +460,14 @@ export default function piStash(pi: ExtensionAPI): void {
 
 	pi.on("session_start", async (_event, ctx) => {
 		reset(ctx, hydrateState(ctx.sessionManager.getBranch()).drafts);
+		const sessionFile = ctx.sessionManager.getSessionFile();
+		if (sessionFile?.endsWith(RECOVERY_SUFFIX)) {
+			if (!ctx.sessionManager.getEntries().some((entry) => entry.type === "custom" && entry.customType === RECOVERY_OPENED_TYPE)) {
+				pi.appendEntry(RECOVERY_OPENED_TYPE);
+			}
+		} else {
+			removeSavedRecovery(ctx, drafts);
+		}
 	});
 
 	pi.on("session_tree", async (_event, ctx) => {
@@ -415,7 +475,12 @@ export default function piStash(pi: ExtensionAPI): void {
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
+		removeSavedRecovery(ctx, drafts);
 		reset(ctx, []);
+	});
+
+	pi.on("agent_end", async (_event, ctx) => {
+		removeSavedRecovery(ctx, drafts);
 	});
 
 	// Additive fork event; older Pi hosts simply never dispatch it. Keep stock API typing elsewhere.
@@ -458,7 +523,12 @@ export default function piStash(pi: ExtensionAPI): void {
 						ctx.ui.notify("Nothing to stash", "warning");
 						return;
 					}
-					drafts = stashDraft(pi, ctx, drafts, args);
+					try {
+						drafts = stashDraft(pi, ctx, drafts, args);
+					} catch (error) {
+						if (ctx.hasUI && isBlankDraft(ctx.ui.getEditorText())) ctx.ui.setEditorText(args);
+						throw error;
+					}
 					return;
 				}
 
