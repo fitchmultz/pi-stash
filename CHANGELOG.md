@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Preserve stashes made before a new Pi session is saved, so restarting before the first assistant reply no longer loses the draft.
 - Preserve recovery sessions opened in another window when the original stashes again or saves, without making an older copy the next `pi -c` target.
+- Keep recovery ordering through restart and native session edits without hiding another window's newer stash.
 
 ## [0.2.0] - 2026-08-06
 

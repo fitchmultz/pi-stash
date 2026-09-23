@@ -7,7 +7,7 @@
  */
 
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -57,6 +57,7 @@ interface TestContext {
 	mode: "tui" | "rpc" | "json" | "print";
 	hasUI: boolean;
 	cwd: string;
+	model?: { provider: string; id: string };
 	ui: TestUI;
 	sessionManager: {
 		getBranch(): PersistedEntry[];
@@ -117,6 +118,7 @@ function createContext(options: {
 	hasUI?: boolean;
 	mode?: "tui" | "rpc" | "json" | "print";
 	cwd?: string;
+	model?: TestContext["model"];
 	sessionManager?: TestContext["sessionManager"];
 }) {
 	const notifications: Notification[] = [];
@@ -131,6 +133,7 @@ function createContext(options: {
 		mode: options.mode ?? (options.hasUI === false ? "print" : options.theme ? "tui" : "rpc"),
 		hasUI: options.hasUI ?? true,
 		cwd: options.cwd ?? process.cwd(),
+		model: options.model,
 		ui: {
 			theme: options.theme ?? { fg: (_name, value) => value, bold: (value) => value },
 			notify(message, type) {
@@ -327,7 +330,7 @@ test("stashing again does not overwrite an opened recovery session", async (t) =
 	}
 });
 
-test("a recovery loaded before the original saves stays writable after agent end", async (t) => {
+test("a loaded recovery stays writable after the original saves and another window quits", async (t) => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-opening-recovery-"));
 	try {
 		const sessionDir = join(cwd, "sessions");
@@ -354,12 +357,31 @@ test("a recovery loaded before the original saves stays writable after agent end
 		assert.deepEqual(hydrateState(SessionManager.open(openingFile).getBranch()).drafts, [
 			"other window", "first draft",
 		]);
+
+		const delayed = SessionManager.open(openingFile);
+		delayed.appendModelChange("openai", "test");
+		delayed.appendThinkingLevelChange("off");
+		const delayedHarness = createHarness((type, data) => delayed.appendCustomEntry(type, data));
+		const delayedContext = createContext({ cwd, sessionManager: delayed, mode: "tui" });
+		const second = SessionManager.open(openingFile);
+		const secondHarness = createHarness((type, data) => second.appendCustomEntry(type, data));
+		const secondContext = createContext({ cwd, sessionManager: second, mode: "tui" });
+		await secondHarness.events.get("session_start")?.({}, secondContext.ctx);
+		await secondHarness.commands.get("stash")?.handler("second window draft", secondContext.ctx);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), openingFile);
+		await delayedHarness.events.get("session_start")?.({}, delayedContext.ctx);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), openingFile);
+		await openingHarness.events.get("session_shutdown")?.({}, openingContext.ctx);
+		assert.deepEqual(hydrateState(SessionManager.open(openingFile).getBranch()).drafts, [
+			"second window draft", "other window", "first draft",
+		]);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), openingFile);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}
 });
 
-test("opening an older recovery does not make it the latest session", async (t) => {
+test("opening an older recovery does not promote it, but renaming it does", async (t) => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-opening-order-"));
 	try {
 		const sessionDir = join(cwd, "sessions");
@@ -385,6 +407,244 @@ test("opening an older recovery does not make it the latest session", async (t) 
 		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), latestFile);
 		await openedHarness.events.get("session_start")?.({}, openedContext.ctx);
 		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), latestFile);
+
+		const overlapping = SessionManager.open(opened.getSessionFile()!);
+		overlapping.appendModelChange("openai", "test");
+		overlapping.appendThinkingLevelChange("off");
+		const overlappingHarness = createHarness((type, data) => overlapping.appendCustomEntry(type, data));
+		const overlappingContext = createContext({ cwd, sessionManager: overlapping, mode: "tui" });
+		await openedHarness.events.get("session_shutdown")?.({}, openedContext.ctx);
+		await overlappingHarness.events.get("session_start")?.({}, overlappingContext.ctx);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), latestFile);
+
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		const renamed = SessionManager.open(opened.getSessionFile()!);
+		renamed.appendSessionInfo("renamed");
+		renamed.appendModelChange("openai", "test");
+		renamed.appendThinkingLevelChange("off");
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), renamed.getSessionFile());
+		const renamedHarness = createHarness((type, data) => renamed.appendCustomEntry(type, data));
+		const renamedContext = createContext({ cwd, sessionManager: renamed, mode: "tui" });
+		await renamedHarness.events.get("session_start")?.({}, renamedContext.ctx);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), renamed.getSessionFile());
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("a native recovery edit stays recent while another window opens it", async (t) => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-concurrent-native-edit-"));
+	try {
+		const sessionDir = join(cwd, "sessions");
+		const original = SessionManager.create(cwd, sessionDir);
+		const originalHarness = createHarness((type, data) => original.appendCustomEntry(type, data));
+		const originalContext = createContext({ cwd, sessionManager: original, mode: "tui" });
+		await originalHarness.commands.get("stash")?.handler("first draft", originalContext.ctx);
+		if (existsSync(original.getSessionFile()!)) {
+			t.skip("this Pi host saves new sessions immediately");
+			return;
+		}
+		const older = SessionManager.continueRecent(cwd, sessionDir).getSessionFile()!;
+		await originalHarness.commands.get("stash")?.handler("second draft", originalContext.ctx);
+		const latestFile = SessionManager.continueRecent(cwd, sessionDir).getSessionFile()!;
+
+		const edited = SessionManager.open(older);
+		edited.appendModelChange("openai", "startup-model");
+		edited.appendThinkingLevelChange("off");
+		const editedHarness = createHarness((type, data) => edited.appendCustomEntry(type, data));
+		const editedContext = createContext({ cwd, sessionManager: edited, mode: "tui" });
+		await editedHarness.events.get("session_start")?.({}, editedContext.ctx);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), latestFile);
+
+		edited.appendModelChange("openai", "user-selected-model");
+		await editedHarness.events.get("model_select")?.({}, editedContext.ctx);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), older);
+
+		const otherWindow = SessionManager.open(older);
+		otherWindow.appendModelChange("openai", "startup-model");
+		otherWindow.appendThinkingLevelChange("off");
+		const otherHarness = createHarness((type, data) => otherWindow.appendCustomEntry(type, data));
+		const otherContext = createContext({ cwd, sessionManager: otherWindow, mode: "tui" });
+		await otherHarness.events.get("session_start")?.({}, otherContext.ctx);
+		await editedHarness.events.get("session_shutdown")?.({}, editedContext.ctx);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), older);
+
+		const resumed = SessionManager.open(older);
+		resumed.appendModelChange("openai", "startup-model");
+		resumed.appendThinkingLevelChange("off");
+		const resumedHarness = createHarness((type, data) => resumed.appendCustomEntry(type, data));
+		const resumedContext = createContext({ cwd, sessionManager: resumed, mode: "tui" });
+		await resumedHarness.events.get("session_start")?.({}, resumedContext.ctx);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), older);
+		assert.deepEqual(hydrateState(resumed.getBranch()).drafts, ["first draft"]);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("a conversation on another recovery branch is not backdated", async () => {
+	for (const activity of ["assistant", "custom_message"] as const) {
+		const cwd = mkdtempSync(join(tmpdir(), "pi-stash-concurrent-message-"));
+		try {
+			const sessionDir = join(cwd, "sessions");
+			const file = join(sessionDir, "shared-pi-stash-recovery.jsonl");
+			mkdirSync(sessionDir, { recursive: true });
+			writeFileSync(file, "");
+			const recovery = SessionManager.open(file, sessionDir, cwd);
+			const stashId = recovery.appendCustomEntry(STASH_ENTRY_TYPE, {
+				drafts: ["draft"], recoveryMtimeMs: Date.now() - 10_000,
+			});
+			if (activity === "assistant") appendAssistant(recovery);
+			else recovery.appendCustomMessageEntry("other-extension", "conversation update", false);
+			const other = SessionManager.create(cwd, sessionDir);
+			appendAssistant(other);
+			recovery.branch(stashId);
+			recovery.appendModelChange("openai", "startup-model");
+			recovery.appendThinkingLevelChange("off");
+			const later = new Date(statSync(other.getSessionFile()!).mtimeMs + 1_000);
+			utimesSync(file, later, later);
+			assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), file);
+
+			const harness = createHarness((type, data) => recovery.appendCustomEntry(type, data));
+			const context = createContext({ cwd, sessionManager: recovery, mode: "tui" });
+			await harness.events.get("session_start")?.({}, context.ctx);
+			assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), file, activity);
+		} finally {
+			rmSync(cwd, { recursive: true, force: true });
+		}
+	}
+});
+
+test("an imported recovery timestamp cannot pin recent sessions", async (t) => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-imported-time-"));
+	try {
+		const sessionDir = join(cwd, "sessions");
+		const original = SessionManager.create(cwd, sessionDir);
+		const harness = createHarness((type, data) => original.appendCustomEntry(type, data));
+		const context = createContext({ cwd, sessionManager: original, mode: "tui" });
+		await harness.commands.get("stash")?.handler("old draft", context.ctx);
+		if (existsSync(original.getSessionFile()!)) {
+			t.skip("this Pi host saves new sessions immediately");
+			return;
+		}
+
+		const file = SessionManager.continueRecent(cwd, sessionDir).getSessionFile()!;
+		const entries = readFileSync(file, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+		const snapshot = entries.find((entry) => entry.customType === STASH_ENTRY_TYPE);
+		snapshot.data.recoveryMtimeMs = Date.parse("2100-01-01");
+		writeFileSync(file, `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`);
+		const imported = SessionManager.open(file);
+		const importedHarness = createHarness((type, data) => imported.appendCustomEntry(type, data));
+		const importedContext = createContext({ cwd, sessionManager: imported, mode: "tui" });
+		await importedHarness.events.get("session_start")?.({}, importedContext.ctx);
+
+		const newer = SessionManager.create(cwd, sessionDir);
+		appendAssistant(newer);
+		const later = new Date(Date.now() + 1_000);
+		utimesSync(newer.getSessionFile()!, later, later);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), newer.getSessionFile());
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("an upgraded recovery keeps native edits made after its original stash", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-legacy-activity-"));
+	try {
+		const sessionDir = join(cwd, "sessions");
+		const file = join(sessionDir, "legacy-pi-stash-recovery.jsonl");
+		mkdirSync(sessionDir, { recursive: true });
+		writeFileSync(file, "");
+		const legacy = SessionManager.open(file, sessionDir, cwd);
+		legacy.appendSessionInfo("Stashed drafts");
+		legacy.appendCustomEntry(STASH_ENTRY_TYPE, { drafts: ["legacy draft"] });
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		appendAssistant(SessionManager.create(cwd, sessionDir));
+
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		legacy.appendCustomEntry("pi-stash-recovery-opened", undefined);
+		legacy.appendModelChange("openai", "user-selected-model");
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), file);
+
+		const opened = SessionManager.open(file);
+		opened.appendModelChange("openai", "startup-model");
+		opened.appendThinkingLevelChange("off");
+		const harness = createHarness((type, data) => opened.appendCustomEntry(type, data));
+		const context = createContext({
+			cwd, sessionManager: opened, mode: "tui", model: { provider: "openai", id: "startup-model" },
+		});
+		await harness.events.get("session_start")?.({}, context.ctx);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), file);
+		await harness.events.get("session_shutdown")?.({}, context.ctx);
+
+		const resumed = SessionManager.open(file);
+		resumed.appendModelChange("openai", "startup-model");
+		resumed.appendThinkingLevelChange("off");
+		const resumedHarness = createHarness((type, data) => resumed.appendCustomEntry(type, data));
+		const resumedContext = createContext({
+			cwd, sessionManager: resumed, mode: "tui", model: { provider: "openai", id: "startup-model" },
+		});
+		await resumedHarness.events.get("session_start")?.({}, resumedContext.ctx);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), file);
+		assert.deepEqual(hydrateState(resumed.getBranch()).drafts, ["legacy draft"]);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("opening an upgraded recovery twice does not make it recent", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-legacy-opening-"));
+	try {
+		const sessionDir = join(cwd, "sessions");
+		const file = join(sessionDir, "legacy-pi-stash-recovery.jsonl");
+		mkdirSync(sessionDir, { recursive: true });
+		writeFileSync(file, "");
+		const legacy = SessionManager.open(file, sessionDir, cwd);
+		legacy.appendCustomEntry(STASH_ENTRY_TYPE, { drafts: ["old draft"] });
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		const newer = SessionManager.create(cwd, sessionDir);
+		appendAssistant(newer);
+		await new Promise((resolve) => setTimeout(resolve, 20));
+
+		for (let attempt = 0; attempt < 2; attempt++) {
+			const opened = SessionManager.open(file);
+			opened.appendModelChange("openai", "startup-model");
+			opened.appendThinkingLevelChange("off");
+			opened.appendCustomEntry("other-extension-startup", undefined);
+			const harness = createHarness((type, data) => opened.appendCustomEntry(type, data));
+			const context = createContext({
+				cwd, sessionManager: opened, mode: "tui", model: { provider: "openai", id: "startup-model" },
+			});
+			await harness.events.get("session_start")?.({}, context.ctx);
+			assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), newer.getSessionFile(), `open ${attempt + 1}`);
+		}
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("an upgraded recovery keeps a native model edit when startup has no model", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-legacy-no-model-"));
+	try {
+		const sessionDir = join(cwd, "sessions");
+		const file = join(sessionDir, "legacy-pi-stash-recovery.jsonl");
+		mkdirSync(sessionDir, { recursive: true });
+		writeFileSync(file, "");
+		const legacy = SessionManager.open(file, sessionDir, cwd);
+		legacy.appendCustomEntry(STASH_ENTRY_TYPE, { drafts: ["legacy draft"] });
+		legacy.appendCustomEntry("pi-stash-recovery-opened", undefined);
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		appendAssistant(SessionManager.create(cwd, sessionDir));
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		legacy.appendModelChange("openai", "user-selected-model");
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), file);
+
+		const opened = SessionManager.open(file);
+		opened.appendThinkingLevelChange("off");
+		const harness = createHarness((type, data) => opened.appendCustomEntry(type, data));
+		const context = createContext({ cwd, sessionManager: opened, mode: "tui" });
+		await harness.events.get("session_start")?.({}, context.ctx);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), file);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}
@@ -487,10 +747,7 @@ test("a late recovery startup respects an original clear and later edits", async
 
 		const openingFile = opening.getSessionFile()!;
 		opening.appendThinkingLevelChange("high");
-		const later = new Date(Math.max(
-			statSync(emptyRecovery).mtimeMs, statSync(original.getSessionFile()!).mtimeMs,
-		) + 1_000);
-		utimesSync(openingFile, later, later);
+		await openingHarness.events.get("thinking_level_select")?.({}, openingContext.ctx);
 		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), openingFile);
 		await openingHarness.events.get("session_shutdown")?.({}, openingContext.ctx);
 
