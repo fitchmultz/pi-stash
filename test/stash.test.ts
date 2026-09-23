@@ -602,6 +602,47 @@ test("a conversation branched before startup thinking does not promote an old re
 	}
 });
 
+test("omitted conversation entries do not promote an old recovery", async (t) => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-omitted-conversation-"));
+	try {
+		const sessionDir = join(cwd, "sessions");
+		const file = join(sessionDir, "edited-pi-stash-recovery.jsonl");
+		mkdirSync(sessionDir, { recursive: true });
+		writeFileSync(file, "");
+		const recovery = SessionManager.open(file, sessionDir, cwd);
+		const edit = (recovery as SessionManager & {
+			appendContextEdit?: (targetId: string, replacement: null) => string;
+		}).appendContextEdit;
+		if (!edit) {
+			t.skip("this Pi host has no context edits");
+			return;
+		}
+		recovery.appendCustomEntry(STASH_ENTRY_TYPE, { drafts: ["old draft"], recoveryMtimeMs: Date.now() });
+		recovery.appendThinkingLevelChange("off");
+		const userId = recovery.appendMessage({
+			role: "user", content: [{ type: "text", text: "Hello" }], timestamp: Date.now(),
+		});
+		appendAssistant(recovery);
+		const assistantId = recovery.getLeafId()!;
+		edit.call(recovery, userId, null);
+		edit.call(recovery, assistantId, null);
+		assert.equal(recovery.buildSessionContext().messages.some((message) => message.role !== "system"), false);
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		const newer = SessionManager.create(cwd, sessionDir);
+		appendAssistant(newer);
+
+		const opened = SessionManager.open(file);
+		opened.appendModelChange("openai", "startup-model");
+		opened.appendThinkingLevelChange("off");
+		const harness = createHarness((type, data) => opened.appendCustomEntry(type, data));
+		const context = createContext({ cwd, sessionManager: opened, mode: "tui" });
+		await harness.events.get("session_start")?.({}, context.ctx);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), newer.getSessionFile());
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
 test("an imported recovery timestamp cannot pin recent sessions", async (t) => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-imported-time-"));
 	try {
