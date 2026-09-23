@@ -124,18 +124,18 @@ function makeMostRecent(ctx: ExtensionContext, sessionFile: string): void {
 	utimesSync(sessionFile, new Date(), new Date(Math.ceil(newest) + 1));
 }
 
-function removeUnusedRecoveries(ctx: ExtensionContext, drafts: readonly string[]): void {
+function removeUnusedRecoveries(ctx: ExtensionContext, drafts: readonly string[]): boolean {
 	const sessionFile = ctx.sessionManager.getSessionFile();
-	if (!sessionFile || !existsSync(sessionFile)) return;
+	if (!sessionFile || !existsSync(sessionFile)) return false;
 
 	try {
 		const dir = ctx.sessionManager.getSessionDir();
 		const prefix = `${parse(sessionFile).name}-`;
 		const recoveries = readdirSync(dir).filter((name) => name.startsWith(prefix) && name.endsWith(RECOVERY_SUFFIX));
-		if (recoveries.length === 0) return;
+		if (recoveries.length === 0) return false;
 
 		const saved = hydrateState(SessionManager.open(sessionFile).getBranch()).drafts;
-		if (saved.length !== drafts.length || saved.some((draft, index) => draft !== drafts[index])) return;
+		if (saved.length !== drafts.length || saved.some((draft, index) => draft !== drafts[index])) return false;
 		for (const name of recoveries) {
 			const recovery = join(dir, name);
 			const entries = SessionManager.open(recovery).getEntries();
@@ -148,8 +148,10 @@ function removeUnusedRecoveries(ctx: ExtensionContext, drafts: readonly string[]
 				rmSync(recovery);
 			}
 		}
+		return true;
 	} catch {
 		// Keep recovery sessions if the original cannot be verified or cleaned up.
+		return false;
 	}
 }
 
@@ -158,8 +160,8 @@ function persistState(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly 
 	const sessionFile = ctx.sessionManager.getSessionFile();
 	if (!sessionFile) return;
 	if (existsSync(sessionFile)) {
-		removeUnusedRecoveries(ctx, drafts);
-		if (sessionFile.endsWith(RECOVERY_SUFFIX)) makeMostRecent(ctx, sessionFile);
+		const hadRecoveries = removeUnusedRecoveries(ctx, drafts);
+		if (hadRecoveries || sessionFile.endsWith(RECOVERY_SUFFIX)) makeMostRecent(ctx, sessionFile);
 		return;
 	}
 
@@ -477,9 +479,11 @@ export default function piStash(pi: ExtensionAPI): void {
 		const sessionFile = ctx.sessionManager.getSessionFile();
 		if (sessionFile?.endsWith(RECOVERY_SUFFIX)) {
 			if (!ctx.sessionManager.getEntries().some((entry) => entry.type === "custom" && entry.customType === RECOVERY_OPENED_TYPE)) {
+				// Claim the recovery without making its older draft the most recent session.
+				const { atime, mtime } = statSync(sessionFile);
 				pi.appendEntry(RECOVERY_OPENED_TYPE);
+				utimesSync(sessionFile, atime, mtime);
 			}
-			makeMostRecent(ctx, sessionFile);
 		} else {
 			removeUnusedRecoveries(ctx, drafts);
 		}
@@ -495,7 +499,10 @@ export default function piStash(pi: ExtensionAPI): void {
 	});
 
 	pi.on("agent_end", async (_event, ctx) => {
-		removeUnusedRecoveries(ctx, drafts);
+		if (removeUnusedRecoveries(ctx, drafts)) {
+			const sessionFile = ctx.sessionManager.getSessionFile();
+			if (sessionFile) makeMostRecent(ctx, sessionFile);
+		}
 	});
 
 	// Additive fork event; older Pi hosts simply never dispatch it. Keep stock API typing elsewhere.

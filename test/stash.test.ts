@@ -345,6 +345,33 @@ test("a recovery loaded before another stash stays writable", async (t) => {
 	}
 });
 
+test("opening an older recovery does not make it the latest session", async (t) => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-opening-order-"));
+	try {
+		const sessionDir = join(cwd, "sessions");
+		const original = SessionManager.create(cwd, sessionDir);
+		const originalHarness = createHarness((type, data) => original.appendCustomEntry(type, data));
+		const originalContext = createContext({ cwd, sessionManager: original, mode: "tui" });
+		await originalHarness.commands.get("stash")?.handler("first draft", originalContext.ctx);
+		if (existsSync(original.getSessionFile()!)) {
+			t.skip("this Pi host saves new sessions immediately");
+			return;
+		}
+
+		const opened = SessionManager.continueRecent(cwd, sessionDir);
+		await originalHarness.commands.get("stash")?.handler("second draft", originalContext.ctx);
+		const latestFile = SessionManager.continueRecent(cwd, sessionDir).getSessionFile();
+		const openedHarness = createHarness((type, data) => opened.appendCustomEntry(type, data));
+		const openedContext = createContext({ cwd, sessionManager: opened, mode: "tui" });
+		await openedHarness.events.get("session_start")?.({}, openedContext.ctx);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), latestFile);
+		await openedHarness.events.get("session_start")?.({}, openedContext.ctx);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), latestFile);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
 test("clearing the latest recovery stays cleared on continue", async (t) => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-clear-latest-recovery-"));
 	try {
@@ -403,6 +430,41 @@ test("clearing the unsaved original keeps an opened recovery separate", async (t
 		assert.deepEqual(hydrateState(SessionManager.open(openedFile).getBranch()).drafts, [
 			"other window", "first draft",
 		]);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("a late recovery startup cannot undo an original clear", async (t) => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-stash-late-recovery-start-"));
+	try {
+		const sessionDir = join(cwd, "sessions");
+		const original = SessionManager.create(cwd, sessionDir);
+		const harness = createHarness((type, data) => original.appendCustomEntry(type, data));
+		const context = createContext({
+			cwd, sessionManager: original, mode: "tui", customResult: { action: "clear" },
+		});
+		await harness.commands.get("stash")?.handler("discard me", context.ctx);
+		if (existsSync(original.getSessionFile()!)) {
+			t.skip("this Pi host saves new sessions immediately");
+			return;
+		}
+
+		const opening = SessionManager.continueRecent(cwd, sessionDir);
+		await harness.commands.get("stash-list")?.handler("", context.ctx);
+		const emptyRecovery = SessionManager.continueRecent(cwd, sessionDir).getSessionFile();
+		const openingHarness = createHarness((type, data) => opening.appendCustomEntry(type, data));
+		const openingContext = createContext({ cwd, sessionManager: opening, mode: "tui" });
+		await openingHarness.events.get("session_start")?.({}, openingContext.ctx);
+		assert.equal(SessionManager.continueRecent(cwd, sessionDir).getSessionFile(), emptyRecovery);
+
+		const future = new Date(Date.now() + 100);
+		utimesSync(opening.getSessionFile()!, future, future);
+		appendAssistant(original);
+		await harness.events.get("agent_end")?.({}, context.ctx);
+		const resumed = SessionManager.continueRecent(cwd, sessionDir);
+		assert.equal(resumed.getSessionFile(), original.getSessionFile());
+		assert.deepEqual(hydrateState(resumed.getBranch()).drafts, []);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}
