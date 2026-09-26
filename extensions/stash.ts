@@ -1,17 +1,17 @@
 /**
  * Purpose: Add fast stash-and-restore draft workflow to the pi editor.
- * Responsibilities: Capture editor drafts, restore them later, persist stash state, and expose shortcuts and picker-based stash management.
- * Scope: Interactive editor draft management for a single pi session.
+ * Responsibilities: Capture editor drafts, restore them later, persist the stash per project directory, and expose shortcuts and picker-based stash management.
+ * Scope: Interactive editor draft management shared by every pi session in one working directory.
  * Usage: Install as a pi package, then use Ctrl+Shift+S to stash and Ctrl+Shift+R to restore or pick from multiple drafts.
- * Invariants/Assumptions: Drafts are restored newest-first by default, blank drafts are never stashed, and non-TUI clients use confirmation or summary flows.
+ * Invariants/Assumptions: Drafts are restored newest-first by default, blank drafts are never stashed, the project file is re-read before every mutation, and non-TUI clients use confirmation or summary flows.
  */
 
-import { randomUUID } from "node:crypto";
-import { appendFileSync, existsSync, readFileSync, readdirSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
-import { join, parse } from "node:path";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { buildSessionContext, DynamicBorder, keyHint, parseSessionEntries, rawKeyHint, SessionManager, sessionEntryToContextMessages } from "@earendil-works/pi-coding-agent";
+import { DynamicBorder, getAgentDir, keyHint, rawKeyHint } from "@earendil-works/pi-coding-agent";
 import { Container, Key, matchesKey, type SelectItem, SelectList, Text } from "@earendil-works/pi-tui";
 import {
 	clampSelectedIndex,
@@ -21,42 +21,19 @@ import {
 	MAX_STASHED_DRAFTS,
 	previewDraft,
 	pushDraft,
-	removeDraftAt,
+	readDrafts,
 	STASH_ENTRY_TYPE,
+	withoutDraft,
 } from "./state.ts";
 
-interface DraftPickerResultRestore {
-	action: "restore";
-	index: number;
-}
-
-interface DraftPickerResultDelete {
-	action: "delete";
-	index: number;
-}
-
-interface DraftPickerResultClear {
-	action: "clear";
-}
-
-interface DraftPickerResultCancel {
-	action: "cancel";
-}
-
-interface DraftPickerResultUnsupported {
-	action: "unsupported";
-}
-
 type DraftPickerResult =
-	| DraftPickerResultRestore
-	| DraftPickerResultDelete
-	| DraftPickerResultClear
-	| DraftPickerResultCancel
-	| DraftPickerResultUnsupported;
+	| { action: "restore"; index: number }
+	| { action: "delete"; index: number }
+	| { action: "clear" }
+	| { action: "cancel" }
+	| { action: "unsupported" };
 
 const INTERACTION_CANCELLED = Symbol("interaction-cancelled");
-const RECOVERY_SUFFIX = "-pi-stash-recovery.jsonl";
-const RECOVERY_ACTIVITY_SUFFIX = ".pi-stash-mtime";
 
 interface Interaction {
 	readonly cancelled: boolean;
@@ -69,10 +46,7 @@ interface Interaction {
 function createInteraction(): Interaction {
 	let cancelled = false;
 	const controller = new AbortController();
-	let resolveCancellation: () => void;
-	const cancellation = new Promise<void>((resolve) => {
-		resolveCancellation = resolve;
-	});
+	const cancellation = Promise.withResolvers<void>();
 	const callbacks = new Set<() => void>();
 
 	return {
@@ -85,111 +59,60 @@ function createInteraction(): Interaction {
 			cancelled = true;
 			controller.abort();
 			for (const callback of callbacks) callback();
-			resolveCancellation();
+			cancellation.resolve();
 		},
 		onCancel(callback) {
 			if (cancelled) callback();
 			else callbacks.add(callback);
 		},
 		async wait<T>(promise: Promise<T>) {
-			return (await Promise.race([promise, cancellation.then(() => INTERACTION_CANCELLED)])) as
-				| T
-				| typeof INTERACTION_CANCELLED;
+			return await Promise.race([promise, cancellation.promise.then((): typeof INTERACTION_CANCELLED => INTERACTION_CANCELLED)]);
 		},
 	};
 }
 
-function supportsCustomPicker(ctx: ExtensionContext): boolean {
-	return ctx.mode === "tui";
+function stashFile(cwd: string): string {
+	const key = createHash("sha256").update(cwd).digest("hex").slice(0, 16);
+	return join(getAgentDir(), "pi-stash", `${key}.json`);
 }
 
-function requiresReplaceConfirmation(ctx: ExtensionContext): boolean {
-	return ctx.mode === "rpc";
-}
-
-function updateStatus(ctx: ExtensionContext, drafts: readonly string[]): void {
-	if (drafts.length === 0) {
-		ctx.ui.setStatus("pi-stash", undefined);
-		return;
-	}
-
-	ctx.ui.setStatus("pi-stash", ctx.ui.theme.fg("accent", `📦 ${countLabel(drafts.length)}`));
-}
-
-function nextSessionMtime(ctx: ExtensionContext): number {
-	const dir = ctx.sessionManager.getSessionDir();
-	const newest = readdirSync(dir)
-		.filter((name) => name.endsWith(".jsonl"))
-		.reduce((mtime, name) => Math.max(mtime, statSync(join(dir, name)).mtime.getTime()), Date.now());
-	// Pi 0.84 compares Date mtimes; the extra microseconds survive Node 22's utimes rounding.
-	return newest + 1.01;
-}
-
-function localRecoveryMtime(mtimeMs: unknown): number | undefined {
-	// An imported recovery's timestamp must not pin this machine's recent sessions far into the future.
-	return typeof mtimeMs === "number" && Number.isFinite(mtimeMs) && mtimeMs >= 0 &&
-		mtimeMs <= Date.now() + 5_000 ? mtimeMs : undefined;
-}
-
-function recoveryActivityMtime(file: string): number | undefined {
+function loadDrafts(cwd: string): string[] {
+	const file = stashFile(cwd);
+	let text: string;
 	try {
-		let latest: number | undefined;
-		for (const line of readFileSync(`${file}${RECOVERY_ACTIVITY_SUFFIX}`, "utf8").split("\n")) {
-			if (!line) continue;
-			const mtimeMs = localRecoveryMtime(Number(line));
-			if (mtimeMs !== undefined) latest = Math.max(latest ?? 0, mtimeMs);
-		}
-		return latest;
-	} catch {
-		return undefined;
+		text = readFileSync(file, "utf8");
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+		throw error;
 	}
+	// Refuse to overwrite a file we cannot read back; it may hold the user's only copy of a draft.
+	const drafts = readDrafts(JSON.parse(text));
+	if (!drafts) throw new Error(`Invalid stash file: ${file}`);
+	return drafts;
 }
 
-function recordRecoveryActivity(file: string, mtimeMs: number): void {
-	if (mtimeMs <= (recoveryActivityMtime(file) ?? 0)) return;
+function saveDrafts(cwd: string, drafts: readonly string[]): void {
+	const file = stashFile(cwd);
+	mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
+	const temporary = `${file}.${randomUUID()}.tmp`;
 	try {
-		appendFileSync(`${file}${RECOVERY_ACTIVITY_SUFFIX}`, `${mtimeMs}\n`, { mode: 0o600 });
-	} catch {
-		// Recency metadata is best-effort; the stash remains in its session file.
-	}
-}
-
-function recordNativeRecoveryChange(ctx: ExtensionContext): void {
-	const file = ctx.sessionManager.getSessionFile();
-	if (!file?.endsWith(RECOVERY_SUFFIX) || !existsSync(file)) return;
-	const mtimeMs = Math.max(nextSessionMtime(ctx), (recoveryActivityMtime(file) ?? 0) + 1.01);
-	utimesSync(file, statSync(file).atime, mtimeMs / 1000);
-	recordRecoveryActivity(file, mtimeMs);
-}
-
-function persistState(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly string[]): void {
-	const sessionFile = ctx.sessionManager.getSessionFile();
-	const recoveryMtimeMs = sessionFile?.endsWith(RECOVERY_SUFFIX) ? nextSessionMtime(ctx) : undefined;
-	pi.appendEntry(STASH_ENTRY_TYPE, {
-		drafts: [...drafts],
-		...(recoveryMtimeMs === undefined ? {} : { recoveryMtimeMs }),
-	});
-	if (!sessionFile) return;
-	if (existsSync(sessionFile)) {
-		utimesSync(sessionFile, new Date(), (recoveryMtimeMs ?? nextSessionMtime(ctx)) / 1000);
-		return;
-	}
-
-	const dir = ctx.sessionManager.getSessionDir();
-	const recovery = join(dir, `${parse(sessionFile).name}-${randomUUID()}${RECOVERY_SUFFIX}`);
-	const temporary = `${recovery}.tmp`;
-	try {
-		writeFileSync(temporary, "", { flag: "wx", mode: 0o600 });
-		const saved = SessionManager.open(temporary, dir, ctx.cwd);
-		saved.appendSessionInfo("Stashed drafts");
-		const mtimeMs = nextSessionMtime(ctx);
-		saved.appendCustomEntry(STASH_ENTRY_TYPE, { drafts: [...drafts], recoveryMtimeMs: mtimeMs });
-		renameSync(temporary, recovery);
-		// ponytail: Official Pi cannot tell whether another window loaded a recovery before session_start. Keep each copy until official Pi saves custom entries eagerly.
-		utimesSync(recovery, new Date(), mtimeMs / 1000);
+		writeFileSync(temporary, `${JSON.stringify({ cwd, drafts })}\n`, { mode: 0o600 });
+		renameSync(temporary, file);
 	} finally {
 		rmSync(temporary, { force: true });
 	}
+}
+
+function updateStatus(ctx: ExtensionContext, drafts: readonly string[]): void {
+	ctx.ui.setStatus("pi-stash", drafts.length === 0 ? undefined : ctx.ui.theme.fg("accent", `📦 ${countLabel(drafts.length)}`));
+}
+
+// ponytail: unlocked read-modify-write; two windows mutating in the same instant resolve last-writer-wins. Add a lockfile if that ever loses a draft.
+function updateDrafts(ctx: ExtensionContext, update: (drafts: string[]) => string[]): string[] {
+	const drafts = update(loadDrafts(ctx.cwd));
+	saveDrafts(ctx.cwd, drafts);
+	updateStatus(ctx, drafts);
+	return drafts;
 }
 
 function ensureEditor(ctx: ExtensionContext, action: string): boolean {
@@ -198,86 +121,50 @@ function ensureEditor(ctx: ExtensionContext, action: string): boolean {
 	return false;
 }
 
-function stashDraft(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly string[], draft: string): string[] {
-	const nextDrafts = pushDraft(drafts, draft, MAX_STASHED_DRAFTS);
-	persistState(pi, ctx, nextDrafts);
-	updateStatus(ctx, nextDrafts);
-
-	const suffix = drafts.length >= MAX_STASHED_DRAFTS ? " Oldest draft dropped." : "";
-	ctx.ui.notify(`Stashed ${countLabel(nextDrafts.length)}: ${previewDraft(draft)}${suffix}`, "info");
-	return nextDrafts;
+function stashDraft(ctx: ExtensionContext, draft: string): void {
+	let dropped = false;
+	const drafts = updateDrafts(ctx, (current) => {
+		dropped = current.length >= MAX_STASHED_DRAFTS;
+		return pushDraft(current, draft);
+	});
+	ctx.ui.notify(`Stashed ${countLabel(drafts.length)}: ${previewDraft(draft)}${dropped ? " Oldest draft dropped." : ""}`, "info");
 }
 
-function stashEditor(pi: ExtensionAPI, ctx: ExtensionContext, drafts: readonly string[]): string[] {
-	if (!ensureEditor(ctx, "Stashing")) return [...drafts];
+function stashEditor(ctx: ExtensionContext): void {
+	if (!ensureEditor(ctx, "Stashing")) return;
 
 	const draft = ctx.ui.getEditorText();
 	if (isBlankDraft(draft)) {
 		ctx.ui.notify("Nothing to stash", "warning");
-		return [...drafts];
-	}
-
-	const nextDrafts = stashDraft(pi, ctx, drafts, draft);
-	ctx.ui.setEditorText("");
-	return nextDrafts;
-}
-
-function insertDraftIntoEditor(ctx: ExtensionContext, draft: string): void {
-	if (isBlankDraft(ctx.ui.getEditorText())) {
-		ctx.ui.setEditorText(draft);
 		return;
 	}
 
-	ctx.ui.pasteToEditor(draft);
+	stashDraft(ctx, draft);
+	ctx.ui.setEditorText("");
 }
 
-async function restoreDraftAt(
-	pi: ExtensionAPI,
-	ctx: ExtensionContext,
-	drafts: readonly string[],
-	index: number,
-	interaction: Interaction,
-): Promise<string[]> {
-	if (!ensureEditor(ctx, "Restoring")) return [...drafts];
+async function restoreDraft(ctx: ExtensionContext, draft: string, interaction: Interaction): Promise<void> {
+	if (!ensureEditor(ctx, "Restoring")) return;
 
-	const { draft, remaining } = removeDraftAt(drafts, index);
-	if (!draft) {
-		ctx.ui.notify("No stashed draft at that position", "warning");
-		return [...drafts];
-	}
-
-	if (requiresReplaceConfirmation(ctx)) {
-		const confirmation = ctx.ui.confirm(
+	if (ctx.mode === "rpc") {
+		const confirmed = await interaction.wait(ctx.ui.confirm(
 			"Replace editor with stashed draft?",
 			"This non-TUI client cannot safely merge stashed drafts with existing editor text. Restoring will replace the current editor contents.",
 			{ signal: interaction.signal },
-		);
-		const confirmed = await interaction.wait(confirmation);
-		if (interaction.cancelled || confirmed === INTERACTION_CANCELLED) return [...drafts];
+		));
+		if (interaction.cancelled || confirmed === INTERACTION_CANCELLED) return;
 		if (!confirmed) {
 			ctx.ui.notify("Restore cancelled", "info");
-			return [...drafts];
+			return;
 		}
-
+		ctx.ui.setEditorText(draft);
+	} else if (isBlankDraft(ctx.ui.getEditorText())) {
 		ctx.ui.setEditorText(draft);
 	} else {
-		insertDraftIntoEditor(ctx, draft);
+		ctx.ui.pasteToEditor(draft);
 	}
-	persistState(pi, ctx, remaining);
-	updateStatus(ctx, remaining);
+	updateDrafts(ctx, (current) => withoutDraft(current, draft));
 	ctx.ui.notify(`Restored draft: ${previewDraft(draft)}`, "info");
-	return remaining;
-}
-
-function clearDrafts(pi: ExtensionAPI, ctx: ExtensionContext): string[] {
-	persistState(pi, ctx, []);
-	updateStatus(ctx, []);
-	ctx.ui.notify("Cleared stashed drafts", "info");
-	return [];
-}
-
-function summarizeDrafts(drafts: readonly string[]): string {
-	return drafts.map((draft, index) => `${index + 1}. ${previewDraft(draft, 64)}`).join("\n");
 }
 
 function buildDraftItems(drafts: readonly string[]): SelectItem[] {
@@ -298,7 +185,7 @@ async function showDraftPicker(
 	selectedIndex: number,
 	interaction: Interaction,
 ): Promise<DraftPickerResult> {
-	if (!supportsCustomPicker(ctx)) return { action: "unsupported" };
+	if (ctx.mode !== "tui") return { action: "unsupported" };
 
 	const items = buildDraftItems(drafts);
 
@@ -365,103 +252,100 @@ async function showDraftPicker(
 	return result === INTERACTION_CANCELLED ? { action: "cancel" } : (result ?? { action: "unsupported" });
 }
 
-interface ManageDraftsOptions {
-	onUnsupported: "list" | "restore-latest";
-}
-
 async function manageDrafts(
-	pi: ExtensionAPI,
 	ctx: ExtensionContext,
-	drafts: readonly string[],
 	interaction: Interaction,
-	options: ManageDraftsOptions = { onUnsupported: "list" },
-): Promise<string[]> {
-	if (!ensureEditor(ctx, "Listing stashes")) return [...drafts];
+	onUnsupported: "list" | "restore-latest" = "list",
+): Promise<void> {
+	if (!ensureEditor(ctx, "Listing stashes")) return;
+	let drafts = loadDrafts(ctx.cwd);
 	if (drafts.length === 0) {
 		ctx.ui.notify("No stashed drafts", "info");
-		return [...drafts];
+		return;
 	}
 
-	let nextDrafts = [...drafts];
 	let selectedIndex = 0;
-
-	while (nextDrafts.length > 0) {
-		const result = await showDraftPicker(ctx, nextDrafts, selectedIndex, interaction);
+	while (drafts.length > 0) {
+		const result = await showDraftPicker(ctx, drafts, selectedIndex, interaction);
 
 		if (result.action === "unsupported") {
-			if (options.onUnsupported === "restore-latest") {
+			if (onUnsupported === "restore-latest") {
 				ctx.ui.notify("Stash picker unavailable in this client; using the latest stash for restore.", "info");
-				return await restoreDraftAt(pi, ctx, nextDrafts, 0, interaction);
+				return restoreDraft(ctx, drafts[0], interaction);
 			}
-
-			ctx.ui.notify(`Stashed drafts (latest first):\n${summarizeDrafts(nextDrafts)}`, "info");
-			return nextDrafts;
+			const summary = drafts.map((draft, index) => `${index + 1}. ${previewDraft(draft, 64)}`).join("\n");
+			ctx.ui.notify(`Stashed drafts (latest first):\n${summary}`, "info");
+			return;
 		}
 
-		if (result.action === "cancel") {
-			return nextDrafts;
-		}
-
-		if (result.action === "restore") {
-			return await restoreDraftAt(pi, ctx, nextDrafts, result.index, interaction);
-		}
+		if (result.action === "cancel") return;
 
 		if (result.action === "clear") {
 			const confirmed = await interaction.wait(
 				ctx.ui.confirm("Clear all stashes?", "Delete all stashed drafts?", { signal: interaction.signal }),
 			);
-			if (interaction.cancelled || confirmed === INTERACTION_CANCELLED) return nextDrafts;
-			if (confirmed) return clearDrafts(pi, ctx);
-			continue;
+			if (interaction.cancelled || confirmed === INTERACTION_CANCELLED) return;
+			if (!confirmed) continue;
+			updateDrafts(ctx, () => []);
+			ctx.ui.notify("Cleared stashed drafts", "info");
+			return;
 		}
 
-		const removed = removeDraftAt(nextDrafts, result.index);
-		if (!removed.draft) {
+		const draft = drafts[result.index];
+		if (draft === undefined) {
 			ctx.ui.notify("No stashed draft at that position", "warning");
 			selectedIndex = 0;
 			continue;
 		}
+		if (result.action === "restore") return restoreDraft(ctx, draft, interaction);
 
-		nextDrafts = removed.remaining;
-		persistState(pi, ctx, nextDrafts);
-		updateStatus(ctx, nextDrafts);
-		ctx.ui.notify(`Deleted stashed draft: ${previewDraft(removed.draft)}`, "info");
-		selectedIndex = removed.nextIndex;
+		drafts = updateDrafts(ctx, (current) => withoutDraft(current, draft));
+		ctx.ui.notify(`Deleted stashed draft: ${previewDraft(draft)}`, "info");
+		selectedIndex = result.index;
 	}
-
-	return nextDrafts;
 }
 
-async function restoreLatestOrPick(
-	pi: ExtensionAPI,
-	ctx: ExtensionContext,
-	drafts: readonly string[],
-	interaction: Interaction,
-): Promise<string[]> {
+async function restoreLatestOrPick(ctx: ExtensionContext, interaction: Interaction): Promise<void> {
+	const drafts = loadDrafts(ctx.cwd);
 	if (drafts.length === 0) {
 		ctx.ui.notify("No stashed drafts", "warning");
-		return [...drafts];
+		return;
+	}
+	if (drafts.length === 1) return restoreDraft(ctx, drafts[0], interaction);
+	return manageDrafts(ctx, interaction, "restore-latest");
+}
+
+function importSessionDrafts(pi: ExtensionAPI, ctx: ExtensionContext): void {
+	// Releases before 0.3.0 kept the stash in session entries.
+	const legacy = hydrateState(ctx.sessionManager.getBranch());
+	if (legacy.length === 0) {
+		updateStatus(ctx, loadDrafts(ctx.cwd));
+		return;
 	}
 
-	if (drafts.length === 1) {
-		return await restoreDraftAt(pi, ctx, drafts, 0, interaction);
-	}
-
-	return manageDrafts(pi, ctx, drafts, interaction, { onUnsupported: "restore-latest" });
+	let imported = 0;
+	let dropped = 0;
+	updateDrafts(ctx, (current) => {
+		const added = legacy.filter((draft) => !current.includes(draft));
+		imported = added.length;
+		dropped = Math.max(0, current.length + added.length - MAX_STASHED_DRAFTS);
+		return [...current, ...added].slice(0, MAX_STASHED_DRAFTS);
+	});
+	pi.appendEntry(STASH_ENTRY_TYPE, { drafts: [] });
+	if (imported === 0) return;
+	const suffix = dropped > 0 ? ` ${countLabel(dropped)} over the limit stayed in the session history.` : "";
+	ctx.ui.notify(`Imported ${countLabel(imported)} from this session into the project stash.${suffix}`, "info");
 }
 
 export default function piStash(pi: ExtensionAPI): void {
-	let drafts: string[] = [];
 	let generation = 0;
 	let pendingInteraction: Interaction | undefined;
 	let pendingOperation: Promise<void> = Promise.resolve();
 
 	const enqueue = (operation: () => void | Promise<void>): Promise<void> => {
 		const requestedGeneration = generation;
-		const result = pendingOperation.then(
-			() => requestedGeneration === generation && operation(),
-			() => requestedGeneration === generation && operation(),
-		);
+		const run = () => requestedGeneration === generation && operation();
+		const result = pendingOperation.then(run, run);
 		pendingOperation = result.then(() => {}, () => {});
 		return result.then(() => {});
 	};
@@ -477,153 +361,59 @@ export default function piStash(pi: ExtensionAPI): void {
 			}
 		});
 
-	const reset = (ctx: ExtensionContext, nextDrafts: string[]) => {
+	const reset = () => {
 		generation++;
 		pendingInteraction?.cancel();
 		pendingInteraction = undefined;
-		drafts = nextDrafts;
-		updateStatus(ctx, drafts);
 	};
 
-	pi.on("session_start", async (event, ctx) => {
-		reset(ctx, hydrateState(ctx.sessionManager.getBranch()).drafts);
-		const file = ctx.sessionManager.getSessionFile();
-		if (event.reason === "reload" || !file?.endsWith(RECOVERY_SUFFIX)) return;
-		const branch = ctx.sessionManager.getBranch();
-		if (buildSessionContext(branch).messages.some((message) => message.role !== "system")) {
-			// Pi cannot append startup settings when thinking precedes effective conversation.
-			let hasThinking = false;
-			for (const entry of branch) {
-				if (entry.type === "thinking_level_change") hasThinking = true;
-				if (hasThinking && sessionEntryToContextMessages(entry).some((message) => message.role !== "system")) return;
-			}
-		}
-		const entries = parseSessionEntries(readFileSync(file, "utf8"));
-
-		// Pi appends startup model settings to message-empty sessions before this event.
-		let mtimeMs: number | undefined;
-		let stashIndex = -1;
-		let legacy = false;
-		const activityMtimeMs = recoveryActivityMtime(file);
-		for (let index = entries.length - 1; index >= 0; index--) {
-			const entry = entries[index];
-			if (entry.type !== "custom" || entry.customType !== STASH_ENTRY_TYPE) continue;
-			const snapshot = entry.data as { drafts?: unknown; recoveryMtimeMs?: unknown } | undefined;
-			if (!Array.isArray(snapshot?.drafts) || !snapshot.drafts.every((draft) => typeof draft === "string")) continue;
-			// Older recovery files have only the entry timestamp, without the sub-millisecond order.
-			mtimeMs = localRecoveryMtime(snapshot.recoveryMtimeMs) ??
-				localRecoveryMtime(Date.parse(entry.timestamp));
-			stashIndex = index;
-			legacy = snapshot.recoveryMtimeMs === undefined && activityMtimeMs === undefined;
-			break;
-		}
-		if (mtimeMs === undefined) return;
-		// A different window may have written a newer conversation on another branch.
-		for (const entry of entries) {
-			if (entry.type === "session" || (entry.type === "message" && entry.message.role === "system")) continue;
-			// A context edit changes the conversation without projecting a message itself.
-			if ((entry.type as string) !== "context_edit" && sessionEntryToContextMessages(entry).length === 0) continue;
-			const changed = localRecoveryMtime(Date.parse(entry.timestamp));
-			if (changed !== undefined) mtimeMs = Math.max(mtimeMs, changed + 1.01);
-		}
-		const startupIds = new Set<string>();
-		if (legacy) {
-			const branch = ctx.sessionManager.getBranch();
-			let thinkingIndex = branch.length - 1;
-			while (thinkingIndex >= 0 && branch[thinkingIndex].type !== "thinking_level_change") thinkingIndex--;
-			if (thinkingIndex >= 0) {
-				startupIds.add(branch[thinkingIndex].id);
-				if (ctx.model && branch[thinkingIndex - 1]?.type === "model_change") {
-					startupIds.add(branch[thinkingIndex - 1].id);
-				}
-			}
-		}
-		for (let index = stashIndex + 1; index < entries.length; index++) {
-			const entry = entries[index];
-			if (entry.type !== "session_info" && entry.type !== "label" &&
-				!(legacy && !startupIds.has(entry.id) &&
-					(entry.type === "model_change" || entry.type === "thinking_level_change" ||
-						(entry.type === "custom" && entry.customType === "pi-stash-recovery-opened")))) continue;
-			const changed = localRecoveryMtime(Date.parse(entry.timestamp));
-			if (changed !== undefined) mtimeMs = Math.max(mtimeMs, changed + 1.01);
-		}
-		mtimeMs = Math.max(mtimeMs, activityMtimeMs ?? 0);
-		utimesSync(file, statSync(file).atime, mtimeMs / 1000);
-		// Mark a legacy recovery as migrated so a later startup's settings aren't counted as edits.
-		if (legacy) recordRecoveryActivity(file, mtimeMs);
-	});
-
-	pi.on("model_select", (_event, ctx) => recordNativeRecoveryChange(ctx));
-	pi.on("thinking_level_select", (_event, ctx) => recordNativeRecoveryChange(ctx));
-	pi.on("session_info_changed", (_event, ctx) => recordNativeRecoveryChange(ctx));
-
-	pi.on("session_tree", async (_event, ctx) => {
-		reset(ctx, hydrateState(ctx.sessionManager.getBranch()).drafts);
+	pi.on("session_start", async (_event, ctx) => {
+		reset();
+		importSessionDrafts(pi, ctx);
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
-		reset(ctx, []);
+		reset();
+		ctx.ui.setStatus("pi-stash", undefined);
 	});
 
-	// Additive fork event; older Pi hosts simply never dispatch it. Keep stock API typing elsewhere.
-	(pi.on as unknown as (event: "session_checkpoint", handler: (
-		event: unknown, ctx: ExtensionContext,
-	) => { sleepReady: boolean; reason?: string }) => void)("session_checkpoint", (_event, ctx) => {
-		// Commands/shortcuts return pendingOperation to Pi: native ingress owns and joins that chain.
-		// Never cancel a picker, stash editor text, or run shutdown just to make a checkpoint pass.
-		if (pendingInteraction) return { sleepReady: false, reason: "Stash interaction is still live" };
-		const saved = hydrateState(ctx.sessionManager.getBranch()).drafts;
-		if (saved.length !== drafts.length || saved.some((draft, index) => draft !== drafts[index])) {
-			return { sleepReady: false, reason: "Stash state differs from the selected branch" };
-		}
-		return { sleepReady: true };
-	});
+	// Additive fork event; official Pi never dispatches it. Keep stock API typing elsewhere.
+	(pi.on as unknown as (event: "session_checkpoint", handler: () => { sleepReady: boolean; reason?: string }) => void)(
+		"session_checkpoint",
+		// Every mutation is already on disk; only a live picker or confirmation holds unsaved intent.
+		() => (pendingInteraction ? { sleepReady: false, reason: "Stash interaction is still live" } : { sleepReady: true }),
+	);
 
 	pi.registerShortcut("ctrl+shift+s", {
 		description: "Stash the current draft and clear the editor",
-		handler: (ctx) =>
-			enqueue(() => {
-				drafts = stashEditor(pi, ctx, drafts);
-			}),
+		handler: (ctx) => enqueue(() => stashEditor(ctx)),
 	});
 
 	pi.registerShortcut("ctrl+shift+r", {
 		description: "Restore the latest stashed draft, or pick from multiple drafts",
-		handler: (ctx) =>
-			enqueueInteraction(async (interaction) => {
-				const nextDrafts = await restoreLatestOrPick(pi, ctx, drafts, interaction);
-				if (!interaction.cancelled) drafts = nextDrafts;
-			}),
+		handler: (ctx) => enqueueInteraction((interaction) => restoreLatestOrPick(ctx, interaction)),
 	});
 
 	pi.registerCommand("stash", {
 		description: "Stash the current editor draft, or stash the provided text",
 		handler: (args, ctx) =>
 			enqueue(() => {
-				if (args.length > 0) {
-					if (isBlankDraft(args)) {
-						ctx.ui.notify("Nothing to stash", "warning");
-						return;
-					}
-					try {
-						drafts = stashDraft(pi, ctx, drafts, args);
-					} catch (error) {
-						if (ctx.hasUI && isBlankDraft(ctx.ui.getEditorText())) ctx.ui.setEditorText(args);
-						throw error;
-					}
+				if (args.length === 0) return stashEditor(ctx);
+				if (isBlankDraft(args)) {
+					ctx.ui.notify("Nothing to stash", "warning");
 					return;
 				}
-
-				drafts = stashEditor(pi, ctx, drafts);
+				try {
+					stashDraft(ctx, args);
+				} catch (error) {
+					if (ctx.hasUI && isBlankDraft(ctx.ui.getEditorText())) ctx.ui.setEditorText(args);
+					throw error;
+				}
 			}),
 	});
 
 	pi.registerCommand("stash-list", {
 		description: "Browse stashed drafts, restore one, delete one, or clear all",
-		handler: (_args, ctx) =>
-			enqueueInteraction(async (interaction) => {
-				const nextDrafts = await manageDrafts(pi, ctx, drafts, interaction);
-				if (!interaction.cancelled) drafts = nextDrafts;
-			}),
+		handler: (_args, ctx) => enqueueInteraction((interaction) => manageDrafts(ctx, interaction)),
 	});
 }

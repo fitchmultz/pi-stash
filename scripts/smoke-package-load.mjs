@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -57,11 +57,11 @@ try {
 		].map((command) => JSON.stringify(command)).join("\n") + "\n",
 	);
 	const events = stdout.trim().split("\n").map((line) => JSON.parse(line));
-	assert.ok(events.some((event) =>
-		event.type === "entry_appended" &&
-		event.entry?.customType === "pi-stash" &&
-		event.entry.data?.drafts?.[0] === "ci-draft"
-	), stdout);
+	const stashDir = join(agentDir, "pi-stash");
+	assert.deepEqual(
+		readdirSync(stashDir).map((file) => JSON.parse(readFileSync(join(stashDir, file), "utf8")).drafts),
+		[["ci-draft"]],
+	);
 	assert.ok(events.some((event) =>
 		event.type === "extension_ui_request" &&
 		event.method === "notify" &&

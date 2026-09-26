@@ -1,8 +1,8 @@
 /**
  * Purpose: Verify the pure stash-state helpers used by the pi-stash extension.
- * Responsibilities: Cover hydration, stack push behavior, indexed removal, selection clamping, and preview formatting.
+ * Responsibilities: Cover hydration, stack push behavior, draft removal, selection clamping, and preview formatting.
  * Scope: Unit tests for extensions/state.ts only.
- * Usage: Run with `npm test` or `npm run test:node22`; both commands transpile the test bundle into `.tmp/test-dist/` first.
+ * Usage: Run with `npm test`.
  * Invariants/Assumptions: Tests avoid pi runtime dependencies and assert only stable helper behavior.
  */
 
@@ -16,8 +16,8 @@ import {
 	MAX_STASHED_DRAFTS,
 	previewDraft,
 	pushDraft,
-	removeDraftAt,
 	STASH_ENTRY_TYPE,
+	withoutDraft,
 } from "../extensions/state.ts";
 
 test("hydrateState returns the latest valid stash snapshot", () => {
@@ -27,7 +27,7 @@ test("hydrateState returns the latest valid stash snapshot", () => {
 		{ type: "custom", customType: STASH_ENTRY_TYPE, data: { drafts: ["newest", "older"] } },
 	]);
 
-	assert.deepEqual(state, { drafts: ["newest", "older"] });
+	assert.deepEqual(state, ["newest", "older"]);
 });
 
 test("hydrateState ignores malformed snapshots", () => {
@@ -36,7 +36,7 @@ test("hydrateState ignores malformed snapshots", () => {
 		{ type: "message", customType: STASH_ENTRY_TYPE, data: { drafts: ["wrong type"] } },
 	]);
 
-	assert.deepEqual(state, { drafts: [] });
+	assert.deepEqual(state, []);
 });
 
 test("pushDraft keeps newest drafts first and enforces the limit", () => {
@@ -48,20 +48,9 @@ test("pushDraft keeps newest drafts first and enforces the limit", () => {
 	assert.equal(next.at(-1), `draft-${MAX_STASHED_DRAFTS - 2}`);
 });
 
-test("removeDraftAt removes the selected draft and keeps neighboring selection stable", () => {
-	const result = removeDraftAt(["latest", "middle", "oldest"], 1);
-
-	assert.equal(result.draft, "middle");
-	assert.deepEqual(result.remaining, ["latest", "oldest"]);
-	assert.equal(result.nextIndex, 1);
-});
-
-test("removeDraftAt moves selection backward when deleting the last draft", () => {
-	const result = removeDraftAt(["latest", "oldest"], 1);
-
-	assert.equal(result.draft, "oldest");
-	assert.deepEqual(result.remaining, ["latest"]);
-	assert.equal(result.nextIndex, 0);
+test("withoutDraft removes only the newest matching draft", () => {
+	assert.deepEqual(withoutDraft(["same", "other", "same"], "same"), ["other", "same"]);
+	assert.deepEqual(withoutDraft(["other"], "missing"), ["other"]);
 });
 
 test("clampSelectedIndex keeps picker selection in bounds", () => {
