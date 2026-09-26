@@ -1,6 +1,6 @@
 {
   "name": "@fitchmultz/pi-stash",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A pi extension for stashing draft messages and restoring them later.",
   "type": "module",
   "author": "Mitch Fultz (https://github.com/fitchmultz)",
@@ -22,11 +22,10 @@
   },
   "homepage": "https://github.com/fitchmultz/pi-stash#readme",
   "engines": {
-    "node": ">=22.19.0"
+    "node": ">=24.15.0"
   },
   "files": [
     "extensions",
-    "scripts",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"
@@ -39,31 +38,18 @@
       "./extensions/stash.ts"
     ]
   },
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc",
+    "smoke": "node scripts/smoke-package-load.mjs",
+    "check": "npm run typecheck && npm test && npm pack --dry-run",
+    "check:compat": "npm run check && npm run smoke",
+    "prepublishOnly": "npm run check:compat"
+  },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
     "@earendil-works/pi-tui": "*"
   },
-  "devDependencies": {
-    "@earendil-works/pi-coding-agent": "0.86.1",
-    "@earendil-works/pi-tui": "0.86.1",
-    "@types/node": "^25.9.1",
-    "typescript": "^6.0.3"
-  },
-  "scripts": {
-    "clean:test": "node -e \"require('node:fs').rmSync('.tmp/test-dist', { recursive: true, force: true });\"",
-    "build:test": "npm run clean:test && tsc -p tsconfig.test.json",
-    "typecheck": "tsc -p tsconfig.json",
-    "test": "npm run build:test && cd .tmp/test-dist && node --test",
-    "audit": "npm audit --omit=dev --audit-level=high",
-    "pack:check": "npm pack --dry-run",
-    "smoke:package": "node scripts/smoke-package-load.mjs",
-    "ci": "npm run typecheck && npm run test",
-    "check:compat": "npm run ci && npm run pack:check && npm run smoke:package",
-    "validate": "npm run ci && npm run test:node22 && npm run audit && npm run pack:check && npm run smoke:package",
-    "prepublishOnly": "npm run validate",
-    "test:node22": "npm run build:test && cd .tmp/test-dist && npx -y node@22.19.0 --test"
-  },
-  "packageManager": "npm@11.16.0",
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {
       "optional": true
@@ -71,5 +57,12 @@
     "@earendil-works/pi-tui": {
       "optional": true
     }
-  }
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.87.1",
+    "@earendil-works/pi-tui": "0.87.1",
+    "@types/node": "24.19.0",
+    "typescript": "7.0.2"
+  },
+  "packageManager": "npm@12.1.0"
 }

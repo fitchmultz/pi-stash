@@ -2,12 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## [0.3.0] - 2026-09-26
 
-### Fixed
-- Preserve stashes made before a new Pi session is saved, so restarting before the first assistant reply no longer loses the draft.
-- Preserve recovery sessions opened in another window when the original stashes again or saves, without making an older copy the next `pi -c` target.
-- Keep recovery ordering through restart and native session edits without hiding another window's newer stash.
+### Changed
+- Stashes are now one stack per working directory, saved to `~/.pi/agent/pi-stash/` on every change and shared by all Pi windows and sessions in that directory. They survive restarts on official Pi and the fork, including stashes made before a new session is saved.
+- Stashes no longer follow `/tree` branches. Opening a session created by an earlier version imports its stashed drafts once.
+- Every change re-reads the stash file first, so a second window cannot overwrite another window's stash.
+- Requires Node.js `>=24.15.0`. Tests run directly on Node 24 without a build step. Development baseline: Pi `0.87.1`, TypeScript `7.0.2`, `@types/node` `24.19.0`, npm `12.1.0`.
+- CI qualifies official Pi and the maintained fork on Node 24.
+
+### Removed
+- The "Stashed drafts" recovery sessions and the session file timestamp rewriting used to keep them ordered for `pi -c`.
+- The Node 22.19 test lane, the transpiled test build, and the advisory Node 26 job.
 
 ## [0.2.0] - 2026-08-06
 

@@ -4,10 +4,16 @@
 
 ## Requirements
 
-- Pi `0.84.0` or later, running on Node.js `>=22.19.0`
-- npm for local validation
+- Pi, qualified against official Pi `0.87.1` and the maintained fork
+- Node.js `>=24.15.0` and npm for local development
 
 ## Install
+
+From npm:
+
+```bash
+pi install npm:@fitchmultz/pi-stash
+```
 
 From GitHub:
 
@@ -22,50 +28,9 @@ npm install
 pi install .
 ```
 
-Restart Pi after installing or updating extension code or dependencies. The maintained fork's `/reload` refreshes resources and reinitializes cached extension code; it is not code-update activation.
+Restart Pi after installing or updating the extension.
 
-Pi `0.84.0` remains the declared floor. Pi-bundled runtime packages remain optional wildcard peers as required by Pi package loading; exact official `0.86.1` development dependencies define the current qualification baseline, not a promise that every intermediate release was tested.
-
-## Development and validation
-
-`pi` loads the extension from the source `.ts` files, but local tests are transpiled into `.tmp/test-dist/` before Node runs them so validation works on the declared Node 22.19 floor.
-
-```bash
-npm run check:compat  # typecheck + transpiled tests + pack dry-run + native install/load smoke
-npm run ci            # typecheck + transpiled tests
-npm run test:node22   # explicit Node 22.19 compatibility check
-npm run smoke:package # isolated pi install/load smoke
-npm run validate      # ci + Node 22.19 check + audit + pack dry-run + package smoke
-```
-
-The smoke test resolves the installed host's actual `bin.pi` entry (or `PI_HOST_CLI` in qualification) and uses an isolated HOME/agentDir. `PI_COMPAT_EXPECTED_VERSION` and `PI_COMPAT_EXPECTED_PACKAGE_DIR` assert the selected host. The standalone `PI_BIN` override remains available outside compatibility jobs. GitHub PR checks qualify the declared official Pi version and the maintained fork on Node 22.19; Node 26 is an advisory check. They exercise stash, list, and restart/resume through the real CLI, but do not trigger a native checkpoint or test Windows. No production build or `prepare` is needed for this package; Pi loads the shipped TypeScript directly.
-
-## Design
-
-- `Ctrl+Shift+S` stashes the current editor text and clears the editor.
-- `Ctrl+Shift+R` restores immediately when there is one stash, or opens a picker when there are multiple stashes.
-- The stash picker supports arrow-key navigation, `Enter` to restore, `Ctrl+D` to delete the selected stash, and `Ctrl+X` to clear all stashes.
-- In non-TUI clients such as RPC, restore falls back to a replace-editor confirmation for the latest stash, and `/stash-list` prints a latest-first summary instead of trying to open the TUI picker.
-- Restores use `pasteToEditor()` when the editor already has text, so retrieval does not destroy whatever is currently in the box.
-- Drafts are kept as a small LIFO stack, so repeated stashes still work naturally.
-- The current stash stack is persisted in session metadata, so `/reload`, session resume, and `/tree` branch navigation keep drafts aligned with the active branch.
-- The maintained Pi fork saves a new session on the first stash. On official Pi versions that wait for an assistant reply, each early stash update creates a separate **Stashed drafts** session. Copies remain available after the original saves, including ones opened in another window. Use `/resume` to choose a copy; simply opening an older copy does not make it the next `pi -c` target. Renaming a copy or changing its model or thinking level keeps it recent after a restart. Clearing one copy affects only that session.
-- Overlapping stash, restore, and picker actions are serialized so a confirmation or picker cannot race another draft mutation.
-- Session tree changes, shutdown, or replacement dismiss pending TUI confirmation dialogs and pickers before resetting the extension's in-memory state and footer status. RPC confirmations are invalidated server-side; Pi `0.84.0` does not emit a separate client cancellation frame to dismiss the remote dialog.
-- A footer status shows how many drafts are currently stashed.
-- On Pi forks supporting `session_checkpoint`, idle stashes qualify through their existing selected-branch entries. Live pickers/confirmations, queued operations, and editor drafts must finish through native ownership; checkpointing never stashes, discards, or cancels user work. Shutdown cleanup remains unchanged. Older Pi hosts ignore the additive hook.
-
-## Commands
-
-- `/stash` — stash the current editor text
-- `/stash some text` — stash explicit text exactly as provided, including leading or trailing whitespace
-- `/stash-list` — browse, restore, delete, or clear stashes
-
-## Why `Ctrl+Shift+R` for retrieval?
-
-`Ctrl+Shift+S` appears free in the current `pi` keybinding docs, and `Ctrl+Shift+R` is also currently unassigned and mnemonic for **restore**.
-
-## Usage flow
+## Usage
 
 1. Start typing a draft.
 2. Press `Ctrl+Shift+S`.
@@ -73,3 +38,32 @@ The smoke test resolves the installed host's actual `bin.pi` entry (or `PI_HOST_
 4. Press `Ctrl+Shift+R`.
 5. If needed, pick a different stash with the arrow keys or delete one with `Ctrl+D`.
 6. Keep going with the restored draft.
+
+## Commands and shortcuts
+
+- `Ctrl+Shift+S` or `/stash` — stash the editor text and clear the editor
+- `/stash some text` — stash explicit text exactly as provided, including leading or trailing whitespace
+- `Ctrl+Shift+R` — restore the only stash, or open a picker when there are several
+- `/stash-list` — browse, restore (`Enter`), delete (`Ctrl+D`), or clear all (`Ctrl+X`)
+
+## Behavior
+
+- Stashes form a newest-first stack of up to 10 drafts per working directory, like `git stash` for the editor.
+- The stack is saved to `~/.pi/agent/pi-stash/<hash of the directory>.json` (or under `PI_CODING_AGENT_DIR`) on every change. It survives restarts, crashes, and new sessions, and every Pi window and session in the same directory shares it.
+- Restoring pastes into existing editor text instead of replacing it. RPC clients cannot merge, so they confirm before replacing the editor, and `/stash-list` prints a summary instead of the picker.
+- Stash, restore, and picker actions run one at a time. Session shutdown or replacement dismisses an open picker or confirmation without changing the stash.
+- A footer status shows how many drafts are stashed.
+- Versions before `0.3.0` stored stashes inside each session. Opening such a session imports its drafts into the project stack once.
+- On the maintained fork, `session_checkpoint` reports sleep-ready unless a picker or confirmation is open. Official Pi never sends that event.
+
+## Development
+
+`pi` loads the extension's TypeScript directly; Node 24 runs the tests without a build step.
+
+```bash
+npm run check         # typecheck + tests + pack dry-run
+npm run smoke         # isolated pi install, stash, list, and restart through the real CLI
+npm run check:compat  # check + smoke; the contract GitHub runs against official Pi and the fork
+```
+
+The smoke test uses an isolated HOME and agent directory. It resolves the installed host's `bin.pi` (or `PI_HOST_CLI` during qualification); set `PI_BIN` to run it against another `pi` executable.

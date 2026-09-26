@@ -56,32 +56,10 @@ jobs:
           fork_ref=$(git -C fork rev-parse HEAD)
           node automation/scripts/pack-fork.mjs fork "$RUNNER_TEMP/fork-package" "$fork_ref"
           echo "PI_COMPAT_FORK_REF=$fork_ref" >> "$GITHUB_ENV"
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "22.19.0"
-          package-manager-cache: false
       - name: Qualify official Pi and the fork
         shell: bash
         run: |
-          npm install --global "$(node -p 'require("./automation/package.json").packageManager')"
+          npm install --global "$(node -p 'require("./extension/package.json").packageManager')"
           official=$(node -p 'require("./extension/package.json").devDependencies["@earendil-works/pi-coding-agent"]')
           node automation/scripts/qualify.mjs --repo pi-stash --source "$GITHUB_WORKSPACE/extension" --host official --target "$official" --output "$RUNNER_TEMP/official-evidence"
           node automation/scripts/qualify.mjs --repo pi-stash --source "$GITHUB_WORKSPACE/extension" --host fork --target "$RUNNER_TEMP/fork-package" --output "$RUNNER_TEMP/fork-evidence"
-
-  node26:
-    name: Node 26
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    env:
-      PI_OFFLINE: "1"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "26"
-          package-manager-cache: false
-      - run: npm ci --ignore-scripts --no-audit --no-fund
-      - run: npm test
-      - run: npm run smoke:package
