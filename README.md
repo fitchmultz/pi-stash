@@ -4,7 +4,7 @@
 
 ## Requirements
 
-- Pi, qualified against official Pi `0.87.1` and the maintained fork
+- Pi; development baseline official `0.99.1`, with separate maintained-fork qualification
 - Node.js `>=24.15.0` and npm for local development
 
 ## Install
