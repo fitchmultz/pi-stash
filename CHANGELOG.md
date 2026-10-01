@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- Require and qualify Pi 1.0.0; use the host renderer in default fullscreen and regular mode.
+- Forward the native stash picker's mouse events and dispose its cancellation callback when it closes.
+- Cancel live pickers and confirmations on tree navigation while preserving the project-wide stash and legacy session imports.
+- Remove the retired fork-only `session_checkpoint` integration.
+
 ## [0.3.0] - 2026-09-26
 
 ### Changed
