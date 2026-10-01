@@ -19,7 +19,7 @@ jobs:
     env:
       PI_OFFLINE: "1"
       PI_TELEMETRY: "0"
-      PI_AUTOMATION_REF: fe049ea97a8c91d1a4c3a0958a85b37c7759dcc6 # v1.0.0
+      PI_AUTOMATION_REF: a0fdc5780053237ac4ee24f49976ee5449e3aaab # v1.0.1
       npm_config_cache: ${{ github.workspace }}/.npm-cache
       npm_config_audit: "false"
       npm_config_fund: "false"
