@@ -63,6 +63,7 @@ test("native stash shortcuts, picker mouse and replacement preserve drafts", { t
     await runtime.session.prompt("/qa-context");
     const stashFile = join(agentDir, "pi-stash", `${createHash("sha256").update(home).digest("hex").slice(0, 16)}.json`);
     const drafts = () => JSON.parse(readFileSync(stashFile, "utf8")).drafts;
+    // ponytail: the host has no public viewport observer; use its renderer only in this fixture until one exists.
     const renderer = () => (mode as unknown as { renderer: { mode: string; previousScreen?: string[]; previousLines?: string[] } }).renderer;
     const screen = () => (renderer().mode === "fullscreen" ? renderer().previousScreen : renderer().previousLines) ?? [];
     assert.equal(renderer().mode, "fullscreen");
@@ -124,7 +125,7 @@ test("native stash shortcuts, picker mouse and replacement preserve drafts", { t
       assert.deepEqual(drafts(), ["newer mouse draft"]);
     });
 
-    await t.test("fork, resume and reload cancel pending pickers without restoring twice", async () => {
+    await t.test("newSession cancels a pending picker; fork, resume and reload preserve disk drafts", async () => {
       const picker = runtime.session.prompt("/stash-list");
       await rendered();
       const outgoing = context!;
