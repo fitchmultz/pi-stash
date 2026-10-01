@@ -33,44 +33,6 @@ type DraftPickerResult =
 	| { action: "cancel" }
 	| { action: "unsupported" };
 
-const INTERACTION_CANCELLED = Symbol("interaction-cancelled");
-
-interface Interaction {
-	readonly cancelled: boolean;
-	readonly signal: AbortSignal;
-	cancel(): void;
-	onCancel(callback: () => void): void;
-	wait<T>(promise: Promise<T>): Promise<T | typeof INTERACTION_CANCELLED>;
-}
-
-function createInteraction(): Interaction {
-	let cancelled = false;
-	const controller = new AbortController();
-	const cancellation = Promise.withResolvers<void>();
-	const callbacks = new Set<() => void>();
-
-	return {
-		get cancelled() {
-			return cancelled;
-		},
-		signal: controller.signal,
-		cancel() {
-			if (cancelled) return;
-			cancelled = true;
-			controller.abort();
-			for (const callback of callbacks) callback();
-			cancellation.resolve();
-		},
-		onCancel(callback) {
-			if (cancelled) callback();
-			else callbacks.add(callback);
-		},
-		async wait<T>(promise: Promise<T>) {
-			return await Promise.race([promise, cancellation.promise.then((): typeof INTERACTION_CANCELLED => INTERACTION_CANCELLED)]);
-		},
-	};
-}
-
 function stashFile(cwd: string): string {
 	const key = createHash("sha256").update(cwd).digest("hex").slice(0, 16);
 	return join(getAgentDir(), "pi-stash", `${key}.json`);
@@ -143,16 +105,16 @@ function stashEditor(ctx: ExtensionContext): void {
 	ctx.ui.setEditorText("");
 }
 
-async function restoreDraft(ctx: ExtensionContext, draft: string, interaction: Interaction): Promise<void> {
+async function restoreDraft(ctx: ExtensionContext, draft: string, interaction: AbortController): Promise<void> {
 	if (!ensureEditor(ctx, "Restoring")) return;
 
 	if (ctx.mode === "rpc") {
-		const confirmed = await interaction.wait(ctx.ui.confirm(
+		const confirmed = await ctx.ui.confirm(
 			"Replace editor with stashed draft?",
 			"This non-TUI client cannot safely merge stashed drafts with existing editor text. Restoring will replace the current editor contents.",
 			{ signal: interaction.signal },
-		));
-		if (interaction.cancelled || confirmed === INTERACTION_CANCELLED) return;
+		);
+		if (interaction.signal.aborted) return;
 		if (!confirmed) {
 			ctx.ui.notify("Restore cancelled", "info");
 			return;
@@ -183,14 +145,17 @@ async function showDraftPicker(
 	ctx: ExtensionContext,
 	drafts: readonly string[],
 	selectedIndex: number,
-	interaction: Interaction,
+	interaction: AbortController,
 ): Promise<DraftPickerResult> {
+	if (interaction.signal.aborted) return { action: "cancel" };
 	if (ctx.mode !== "tui") return { action: "unsupported" };
 
 	const items = buildDraftItems(drafts);
 
 	const picker = ctx.ui.custom<DraftPickerResult>((tui, theme, _keybindings, done) => {
-		interaction.onCancel(() => done({ action: "cancel" }));
+		const abort = () => done({ action: "cancel" });
+		if (interaction.signal.aborted) abort();
+		else interaction.signal.addEventListener("abort", abort, { once: true });
 		const container = new Container();
 		container.addChild(new DynamicBorder((text) => theme.fg("accent", text)));
 		container.addChild(new Text(theme.fg("accent", theme.bold(`Stashed Drafts (${drafts.length})`))));
@@ -230,6 +195,10 @@ async function showDraftPicker(
 			invalidate() {
 				container.invalidate();
 			},
+			handleMouse(event) {
+				return container.handleMouse(event);
+			},
+			dispose: () => interaction.signal.removeEventListener("abort", abort),
 			handleInput(data: string) {
 				if (matchesKey(data, Key.ctrl("d"))) {
 					const selected = selectList.getSelectedItem();
@@ -247,14 +216,12 @@ async function showDraftPicker(
 			},
 		};
 	});
-	const result = await interaction.wait(picker);
-
-	return result === INTERACTION_CANCELLED ? { action: "cancel" } : (result ?? { action: "unsupported" });
+	return await picker;
 }
 
 async function manageDrafts(
 	ctx: ExtensionContext,
-	interaction: Interaction,
+	interaction: AbortController,
 	onUnsupported: "list" | "restore-latest" = "list",
 ): Promise<void> {
 	if (!ensureEditor(ctx, "Listing stashes")) return;
@@ -267,6 +234,7 @@ async function manageDrafts(
 	let selectedIndex = 0;
 	while (drafts.length > 0) {
 		const result = await showDraftPicker(ctx, drafts, selectedIndex, interaction);
+		if (interaction.signal.aborted) return;
 
 		if (result.action === "unsupported") {
 			if (onUnsupported === "restore-latest") {
@@ -281,10 +249,8 @@ async function manageDrafts(
 		if (result.action === "cancel") return;
 
 		if (result.action === "clear") {
-			const confirmed = await interaction.wait(
-				ctx.ui.confirm("Clear all stashes?", "Delete all stashed drafts?", { signal: interaction.signal }),
-			);
-			if (interaction.cancelled || confirmed === INTERACTION_CANCELLED) return;
+			const confirmed = await ctx.ui.confirm("Clear all stashes?", "Delete all stashed drafts?", { signal: interaction.signal });
+			if (interaction.signal.aborted) return;
 			if (!confirmed) continue;
 			updateDrafts(ctx, () => []);
 			ctx.ui.notify("Cleared stashed drafts", "info");
@@ -305,7 +271,7 @@ async function manageDrafts(
 	}
 }
 
-async function restoreLatestOrPick(ctx: ExtensionContext, interaction: Interaction): Promise<void> {
+async function restoreLatestOrPick(ctx: ExtensionContext, interaction: AbortController): Promise<void> {
 	const drafts = loadDrafts(ctx.cwd);
 	if (drafts.length === 0) {
 		ctx.ui.notify("No stashed drafts", "warning");
@@ -339,7 +305,7 @@ function importSessionDrafts(pi: ExtensionAPI, ctx: ExtensionContext): void {
 
 export default function piStash(pi: ExtensionAPI): void {
 	let generation = 0;
-	let pendingInteraction: Interaction | undefined;
+	let pendingInteraction: AbortController | undefined;
 	let pendingOperation: Promise<void> = Promise.resolve();
 
 	const enqueue = (operation: () => void | Promise<void>): Promise<void> => {
@@ -350,9 +316,9 @@ export default function piStash(pi: ExtensionAPI): void {
 		return result.then(() => {});
 	};
 
-	const enqueueInteraction = (operation: (interaction: Interaction) => Promise<void>): Promise<void> =>
+	const enqueueInteraction = (operation: (interaction: AbortController) => Promise<void>): Promise<void> =>
 		enqueue(async () => {
-			const interaction = createInteraction();
+			const interaction = new AbortController();
 			pendingInteraction = interaction;
 			try {
 				await operation(interaction);
@@ -363,7 +329,7 @@ export default function piStash(pi: ExtensionAPI): void {
 
 	const reset = () => {
 		generation++;
-		pendingInteraction?.cancel();
+		pendingInteraction?.abort();
 		pendingInteraction = undefined;
 	};
 
@@ -377,12 +343,10 @@ export default function piStash(pi: ExtensionAPI): void {
 		ctx.ui.setStatus("pi-stash", undefined);
 	});
 
-	// Additive fork event; official Pi never dispatches it. Keep stock API typing elsewhere.
-	(pi.on as unknown as (event: "session_checkpoint", handler: () => { sleepReady: boolean; reason?: string }) => void)(
-		"session_checkpoint",
-		// Every mutation is already on disk; only a live picker or confirmation holds unsaved intent.
-		() => (pendingInteraction ? { sleepReady: false, reason: "Stash interaction is still live" } : { sleepReady: true }),
-	);
+	pi.on("session_tree", (_event, ctx) => {
+		reset();
+		updateStatus(ctx, loadDrafts(ctx.cwd));
+	});
 
 	pi.registerShortcut("ctrl+shift+s", {
 		description: "Stash the current draft and clear the editor",

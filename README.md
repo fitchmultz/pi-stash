@@ -4,7 +4,7 @@
 
 ## Requirements
 
-- Pi; development baseline official `0.99.1`, with separate maintained-fork qualification
+- Pi 1.0.0 or later; development baseline official `1.0.0`, with separate maintained-fork qualification
 - Node.js `>=24.15.0` and npm for local development
 
 ## Install
@@ -51,10 +51,10 @@ Restart Pi after installing or updating the extension.
 - Stashes form a newest-first stack of up to 10 drafts per working directory, like `git stash` for the editor.
 - The stack is saved to `~/.pi/agent/pi-stash/<hash of the directory>.json` (or under `PI_CODING_AGENT_DIR`) on every change. It survives restarts, crashes, and new sessions, and every Pi window and session in the same directory shares it.
 - Restoring pastes into existing editor text instead of replacing it. RPC clients cannot merge, so they confirm before replacing the editor, and `/stash-list` prints a summary instead of the picker.
-- Stash, restore, and picker actions run one at a time. Session shutdown or replacement dismisses an open picker or confirmation without changing the stash.
+- Stash, restore, and picker actions run one at a time. Session shutdown, replacement or tree navigation dismisses an open picker or confirmation without changing the stash.
+- The picker uses native keybindings and, in fullscreen, native mouse selection. Regular mode retains keyboard selection and terminal-owned scrollback.
 - A footer status shows how many drafts are stashed.
 - Versions before `0.3.0` stored stashes inside each session. Opening such a session imports its drafts into the project stack once.
-- On the maintained fork, `session_checkpoint` reports sleep-ready unless a picker or confirmation is open. Official Pi never sends that event.
 
 ## Development
 
@@ -65,5 +65,7 @@ npm run check         # typecheck + tests + pack dry-run
 npm run smoke         # isolated pi install, stash, list, and restart through the real CLI
 npm run check:compat  # check + smoke; the contract GitHub runs against official Pi and the fork
 ```
+
+`test/native-ui.test.ts` loads the extension through the standalone SDK and native `InteractiveMode`. It checks fullscreen and regular shortcuts, draft merging, picker cancellation and mouse selection, and fork/resume/reload restoration. The tests use an isolated profile and memory terminal, with no model or clipboard calls.
 
 The smoke test uses an isolated HOME and agent directory. It resolves the installed host's `bin.pi` (or `PI_HOST_CLI` during qualification); set `PI_BIN` to run it against another `pi` executable.

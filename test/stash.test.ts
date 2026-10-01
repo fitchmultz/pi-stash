@@ -400,35 +400,58 @@ test("session shutdown closes a rendered picker, clears status, and invalidates 
 	assert.deepEqual(storedDrafts(cwd), ["latest", "older"]);
 });
 
-test("session replacement aborts a pending TUI clear confirmation without clearing", async () => {
+test("session replacement and tree navigation abort a pending TUI clear confirmation without clearing", async () => {
+	for (const event of ["session_start", "session_tree"]) {
+		const cwd = `/project/${randomUUID()}`;
+		await seed(cwd, "older", "latest");
+		const harness = createHarness();
+		const opened = Promise.withResolvers<void>();
+		let confirmationSignal: AbortSignal | undefined;
+		const context = createContext({
+			cwd,
+			mode: "tui",
+			customResult: { action: "clear" },
+			confirm: (_title, _message, options) => {
+				confirmationSignal = options?.signal;
+				opened.resolve();
+				return new Promise<boolean>((resolve) => {
+					confirmationSignal?.addEventListener("abort", () => resolve(true), { once: true });
+				});
+			},
+		});
+
+		const pendingList = harness.commands.get("stash-list")!.handler("", context.ctx);
+		await opened.promise;
+		assert.equal(confirmationSignal?.aborted, false);
+
+		await harness.events.get(event)!({}, context.ctx);
+		await pendingList;
+
+		assert.equal(confirmationSignal?.aborted, true);
+		assert.deepEqual(storedDrafts(cwd), ["latest", "older"]);
+		assert.equal(context.notifications.some((entry) => entry.message === "Cleared stashed drafts"), false);
+	}
+});
+
+test("a picker resolved immediately before shutdown cannot use the stale editor", async () => {
 	const cwd = `/project/${randomUUID()}`;
-	await seed(cwd, "older", "latest");
+	await seed(cwd, "saved");
 	const harness = createHarness();
 	const opened = Promise.withResolvers<void>();
-	let confirmationSignal: AbortSignal | undefined;
-	const context = createContext({
-		cwd,
-		mode: "tui",
-		customResult: { action: "clear" },
-		confirm: (_title, _message, options) => {
-			confirmationSignal = options?.signal;
-			opened.resolve();
-			return new Promise<boolean>((resolve) => {
-				confirmationSignal?.addEventListener("abort", () => resolve(true), { once: true });
-			});
-		},
-	});
-
-	const pendingList = harness.commands.get("stash-list")!.handler("", context.ctx);
+	const choice = Promise.withResolvers<unknown>();
+	const context = createContext({ cwd, mode: "tui", custom: async <T>() => {
+		opened.resolve();
+		return await choice.promise as T;
+	} });
+	const picker = harness.commands.get("stash-list")!.handler("", context.ctx);
 	await opened.promise;
-	assert.equal(confirmationSignal?.aborted, false);
-
-	await harness.events.get("session_start")!({}, context.ctx);
-	await pendingList;
-
-	assert.equal(confirmationSignal?.aborted, true);
-	assert.deepEqual(storedDrafts(cwd), ["latest", "older"]);
-	assert.equal(context.notifications.some((entry) => entry.message === "Cleared stashed drafts"), false);
+	choice.resolve({ action: "restore", index: 0 });
+	const shutdown = harness.events.get("session_shutdown")!({}, context.ctx);
+	Object.defineProperty(context.ctx, "ui", { get() { throw new Error("stale editor"); } });
+	await shutdown;
+	await picker;
+	assert.deepEqual(storedDrafts(cwd), ["saved"]);
+	assert.equal(context.editorText, "");
 });
 
 test("session shutdown invalidates a pending RPC restore confirmation without restoring", async () => {
@@ -456,30 +479,4 @@ test("session shutdown invalidates a pending RPC restore confirmation without re
 	assert.equal(confirmationSignal?.aborted, true);
 	assert.equal(context.editorText, "");
 	assert.deepEqual(storedDrafts(cwd), ["latest"]);
-});
-
-test("checkpoint refuses a live picker without cancelling it", async () => {
-	const cwd = `/project/${randomUUID()}`;
-	await seed(cwd, "saved");
-	const harness = createHarness();
-	const opened = Promise.withResolvers<void>();
-	const result = Promise.withResolvers<unknown>();
-	const context = createContext({
-		cwd,
-		mode: "tui",
-		custom: async <T>() => {
-			opened.resolve();
-			return (await result.promise) as T;
-		},
-	});
-	const checkpoint = harness.events.get("session_checkpoint")!;
-	assert.deepEqual(await checkpoint({}, context.ctx), { sleepReady: true });
-
-	const command = harness.commands.get("stash-list")!.handler("", context.ctx);
-	await opened.promise;
-	assert.deepEqual(await checkpoint({}, context.ctx), { sleepReady: false, reason: "Stash interaction is still live" });
-	result.resolve({ action: "cancel" });
-	await command;
-	assert.deepEqual(await checkpoint({}, context.ctx), { sleepReady: true });
-	assert.deepEqual(storedDrafts(cwd), ["saved"]);
 });
