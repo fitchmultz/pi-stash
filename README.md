@@ -68,4 +68,6 @@ npm run check:compat  # check + smoke; the contract GitHub runs against official
 
 `test/native-ui.test.ts` loads the extension through the standalone SDK and native `InteractiveMode`. It checks fullscreen and regular shortcuts, draft merging, picker cancellation and mouse selection, and fork/resume/reload restoration. The tests use an isolated profile and memory terminal, with no model or clipboard calls.
 
+Default-limit assertions use the documented ten-draft contract, not the production constant they are checking.
+
 The smoke test uses an isolated HOME and agent directory. It resolves the installed host's `bin.pi` (or `PI_HOST_CLI` during qualification); set `PI_BIN` to run it against another `pi` executable.

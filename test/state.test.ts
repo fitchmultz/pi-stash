@@ -13,7 +13,6 @@ import {
 	clampSelectedIndex,
 	countLabel,
 	hydrateState,
-	MAX_STASHED_DRAFTS,
 	previewDraft,
 	pushDraft,
 	STASH_ENTRY_TYPE,
@@ -40,12 +39,12 @@ test("hydrateState ignores malformed snapshots", () => {
 });
 
 test("pushDraft keeps newest drafts first and enforces the limit", () => {
-	const drafts = Array.from({ length: MAX_STASHED_DRAFTS }, (_, index) => `draft-${index}`);
+	const drafts = Array.from({ length: 10 }, (_, index) => `draft-${index}`);
 	const next = pushDraft(drafts, "fresh");
 
-	assert.equal(next.length, MAX_STASHED_DRAFTS);
+	assert.equal(next.length, 10);
 	assert.equal(next[0], "fresh");
-	assert.equal(next.at(-1), `draft-${MAX_STASHED_DRAFTS - 2}`);
+	assert.equal(next.at(-1), "draft-8");
 });
 
 test("withoutDraft removes only the newest matching draft", () => {
