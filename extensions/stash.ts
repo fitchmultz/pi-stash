@@ -12,7 +12,7 @@ import { dirname, join } from "node:path";
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { DynamicBorder, getAgentDir, keyHint, rawKeyHint } from "@earendil-works/pi-coding-agent";
-import { Container, Key, matchesKey, type SelectItem, SelectList, Text } from "@earendil-works/pi-tui";
+import { Container, Key, matchesKey, type KeyId, type SelectItem, SelectList, Text } from "@earendil-works/pi-tui";
 import {
 	clampSelectedIndex,
 	countLabel,
@@ -32,6 +32,58 @@ type DraftPickerResult =
 	| { action: "clear" }
 	| { action: "cancel" }
 	| { action: "unsupported" };
+
+export const DEFAULT_SHORTCUTS = {
+	stash: "ctrl+shift+s",
+	restore: "ctrl+shift+r",
+} satisfies Record<string, KeyId>;
+
+export interface StashShortcutsConfig {
+	shortcuts?: {
+		stash?: KeyId | false;
+		restore?: KeyId | false;
+	};
+}
+
+export function stashConfigFile(agentDir: string = getAgentDir()): string {
+	return join(agentDir, "pi-stash.json");
+}
+
+function resolveShortcut(value: KeyId | false | undefined, fallback: KeyId, name: string, file: string): KeyId | false {
+	if (value === undefined) return fallback;
+	if (value === false) return false;
+	if (typeof value === "string" && value.trim().length > 0) return value as KeyId;
+	throw new Error(`Invalid shortcuts.${name} in ${file}: expected a keybinding string or false`);
+}
+
+export function resolveShortcuts(agentDir: string = getAgentDir()): { stash: KeyId | false; restore: KeyId | false } {
+	const file = stashConfigFile(agentDir);
+	let raw: string;
+	try {
+		raw = readFileSync(file, "utf8");
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") return { ...DEFAULT_SHORTCUTS };
+		throw error;
+	}
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(raw);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		throw new Error(`Failed to parse ${file}: ${message}`);
+	}
+	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+		throw new Error(`Invalid config in ${file}: expected a JSON object`);
+	}
+	const shortcuts = (parsed as StashShortcutsConfig).shortcuts ?? {};
+	if (!shortcuts || typeof shortcuts !== "object" || Array.isArray(shortcuts)) {
+		throw new Error(`Invalid shortcuts in ${file}: expected an object`);
+	}
+	return {
+		stash: resolveShortcut(shortcuts.stash, DEFAULT_SHORTCUTS.stash, "stash", file),
+		restore: resolveShortcut(shortcuts.restore, DEFAULT_SHORTCUTS.restore, "restore", file),
+	};
+}
 
 function stashFile(cwd: string): string {
 	const key = createHash("sha256").update(cwd).digest("hex").slice(0, 16);
@@ -348,15 +400,21 @@ export default function piStash(pi: ExtensionAPI): void {
 		updateStatus(ctx, loadDrafts(ctx.cwd));
 	});
 
-	pi.registerShortcut("ctrl+shift+s", {
-		description: "Stash the current draft and clear the editor",
-		handler: (ctx) => enqueue(() => stashEditor(ctx)),
-	});
+	const shortcuts = resolveShortcuts();
 
-	pi.registerShortcut("ctrl+shift+r", {
-		description: "Restore the latest stashed draft, or pick from multiple drafts",
-		handler: (ctx) => enqueueInteraction((interaction) => restoreLatestOrPick(ctx, interaction)),
-	});
+	if (shortcuts.stash !== false) {
+		pi.registerShortcut(shortcuts.stash, {
+			description: "Stash the current draft and clear the editor",
+			handler: (ctx) => enqueue(() => stashEditor(ctx)),
+		});
+	}
+
+	if (shortcuts.restore !== false) {
+		pi.registerShortcut(shortcuts.restore, {
+			description: "Restore the latest stashed draft, or pick from multiple drafts",
+			handler: (ctx) => enqueueInteraction((interaction) => restoreLatestOrPick(ctx, interaction)),
+		});
+	}
 
 	pi.registerCommand("stash", {
 		description: "Stash the current editor draft, or stash the provided text",
