@@ -46,6 +46,25 @@ Restart Pi after installing or updating the extension.
 - `Ctrl+Shift+R` — restore the only stash, or open a picker when there are several
 - `/stash-list` — browse, restore (`Enter`), delete (`Ctrl+D`), or clear all (`Ctrl+X`)
 
+## Shortcut configuration
+
+Both shortcuts are configurable via `pi-stash.json` in the agent directory
+(`~/.pi/agent/pi-stash.json`, or under `PI_CODING_AGENT_DIR` when set):
+
+```json
+{
+  "shortcuts": {
+    "stash": "ctrl+s",
+    "restore": "ctrl+shift+r"
+  }
+}
+```
+
+Values use the same format as pi keybindings (e.g. `ctrl+s`, `ctrl+shift+s`, `alt+r`).
+Set a shortcut to `false` to disable it and use the `/stash` commands instead.
+Omitted values keep the defaults (`ctrl+shift+s` / `ctrl+shift+r`).
+Restart Pi after changing the file.
+
 ## Behavior
 
 - Stashes form a newest-first stack of up to 10 drafts per working directory, like `git stash` for the editor.
