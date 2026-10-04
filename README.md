@@ -4,7 +4,7 @@
 
 ## Requirements
 
-- Pi 1.0.0 or later; development baseline official `1.0.0`, with separate maintained-fork qualification
+- Pi 1.0.0 or later as the support floor; qualification requires the latest stable official Pi and latest maintained fork `main`, resolving version/commit once per workflow run and retaining exact SDK/CLI evidence. Locked development dependencies are reproducible snapshots, not validation targets
 - Node.js `>=24.15.0` and npm for local development
 
 ## Install
@@ -55,6 +55,14 @@ Restart Pi after installing or updating the extension.
 - The picker uses native keybindings and, in fullscreen, native mouse selection. Regular mode retains keyboard selection and terminal-owned scrollback.
 - A footer status shows how many drafts are stashed.
 - Versions before `0.3.0` stored stashes inside each session. Opening such a session imports its drafts into the project stack once.
+
+For latest-host qualification, run `node /path/to/automation/scripts/qualify.mjs --repo pi-stash --source "$PWD" --host official --target latest --output /tmp/pi-stash-official`, then qualify the packed latest maintained fork with `--host fork --target /path/to/fork-package`. Plain `npm ci` checks only the locked development snapshot, not latest qualification.
+
+## Automatic npm releases (maintainers)
+
+Follow the [shared release procedure](https://github.com/fitchmultz/.github#automatic-npm-releases): merge a reviewed PR into `main` with an intentional `package.json` version bump and a matching versioned `CHANGELOG.md` section. Once configured and enabled, publication is unattended after the existing compatibility checks and candidate-tarball qualification pass. Complete any applicable package-specific release evidence before merging the bump. Automation never bumps versions, overwrites releases, or republishes an existing version; existing manual publisher instructions remain valid.
+
+Failed/unpublished candidates can retry daily at 12:17 UTC or via manual dispatch of `npm release` on `main`, without another bump. Set repository variable `NPM_RELEASE_ENABLED` to anything other than `true` to stop new release plans; cancel pending runs separately when needed. Workflow validation is not evidence of a completed real OIDC publication.
 
 ## Development
 
