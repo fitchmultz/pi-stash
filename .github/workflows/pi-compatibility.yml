@@ -23,9 +23,9 @@ concurrency:
 
 jobs:
   resolve:
-    uses: fitchmultz/.github/.github/workflows/resolve-hosts.yml@9b08d65d70a01c74c4e01477ccf9473e86be33ee # main
+    uses: fitchmultz/.github/.github/workflows/resolve-hosts.yml@4bdc3d292095a7f04fbf034323cee05c8b3b8641 # main
     with:
-      automation-ref: 9b08d65d70a01c74c4e01477ccf9473e86be33ee # main
+      automation-ref: 4bdc3d292095a7f04fbf034323cee05c8b3b8641 # main
       official-version: ${{ inputs.official-version }}
       fork-ref: ${{ inputs.fork-ref }}
 
@@ -38,7 +38,7 @@ jobs:
     env:
       PI_OFFLINE: "1"
       PI_TELEMETRY: "0"
-      PI_AUTOMATION_REF: 9b08d65d70a01c74c4e01477ccf9473e86be33ee # main
+      PI_AUTOMATION_REF: 4bdc3d292095a7f04fbf034323cee05c8b3b8641 # main
       npm_config_cache: ${{ github.workspace }}/.npm-cache
       npm_config_audit: "false"
       npm_config_fund: "false"
