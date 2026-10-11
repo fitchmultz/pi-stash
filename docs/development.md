@@ -2,6 +2,16 @@
 
 [Back to the README](../README.md)
 
+## GitHub installation
+
+You can install directly from this repository:
+
+```bash
+pi install https://github.com/fitchmultz/pi-stash
+```
+
+Restart Pi after you install or update the extension.
+
 ## Local setup
 
 Use Node.js **24.15.0 or later** and npm. The repository declares its npm version in `package.json`.
