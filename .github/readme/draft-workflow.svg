@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="500" viewBox="0 0 1600 500" role="img" aria-labelledby="title desc">
   <title id="title">Pi Stash draft workflow</title>
-  <desc id="desc">Write a draft in Pi, save it and clear the editor with Ctrl+Shift+S, send another message, then press Ctrl+Shift+R to restore the draft or choose from several saved drafts.</desc>
+  <desc id="desc">Write a draft in Pi. Save the draft with Ctrl+Shift+S. Send another message. Restore a draft with Ctrl+Shift+R, or select a draft from the picker.</desc>
   <defs>
     <!-- Dark design tokens adapted from the modern SVG starter. -->
     <linearGradient id="canvas" x1="0" y1="0" x2="1" y2="1">
@@ -52,8 +52,8 @@
   <rect width="1600" height="500" fill="url(#blueBloom)"/>
   <rect width="1600" height="500" fill="url(#violetBloom)"/>
   <g class="sans">
-    <text x="64" y="80" font-size="48" font-weight="700" letter-spacing="-1" fill="#F8FAFC">Keep your draft while you take a detour</text>
-    <text x="64" y="124" font-size="27" fill="#B6C3D7">A quick stash-and-restore workflow inside Pi.</text>
+    <text x="64" y="80" font-size="48" font-weight="700" letter-spacing="-1" fill="#F8FAFC">Save a draft and restore it later</text>
+    <text x="64" y="124" font-size="27" fill="#B6C3D7">Use Pi Stash when you need to send another message.</text>
   </g>
 
   <!-- Arrows indicate the human's sequence, with clear gaps between cards. -->
@@ -68,8 +68,8 @@
     <text x="48" y="48" text-anchor="middle" class="step" fill="#93C5FD">1</text>
     <path d="M254 29h36M254 40h28M254 51h20" stroke="#93C5FD" stroke-width="3" stroke-linecap="round"/>
     <text x="28" y="92" class="card-title">Write a draft</text>
-    <text x="28" y="131" class="card-copy">Start a longer</text>
-    <text x="28" y="166" class="card-copy">message in Pi.</text>
+    <text x="28" y="131" class="card-copy">Write your draft</text>
+    <text x="28" y="166" class="card-copy">in the Pi editor.</text>
     <rect x="28" y="188" width="264" height="40" rx="12" fill="#0C1425" stroke="#293750"/>
     <text x="160" y="216" text-anchor="middle" class="chip" fill="#93C5FD">EDITOR</text>
   </g>
@@ -80,9 +80,9 @@
     <circle cx="48" cy="40" r="20" fill="#A78BFA" fill-opacity="0.18"/>
     <text x="48" y="48" text-anchor="middle" class="step" fill="#DDD6FE">2</text>
     <path d="M255 32h35v23h-35zM251 27h43v8h-43M265 44h15" fill="none" stroke="#C4B5FD" stroke-width="2.5" stroke-linejoin="round"/>
-    <text x="28" y="92" class="card-title">Park the draft</text>
-    <text x="28" y="131" class="card-copy">Save it locally.</text>
-    <text x="28" y="166" class="card-copy">Editor is cleared.</text>
+    <text x="28" y="92" class="card-title">Save the draft</text>
+    <text x="28" y="131" class="card-copy">Pi saves the draft.</text>
+    <text x="28" y="166" class="card-copy">Pi clears the editor.</text>
     <rect x="28" y="188" width="264" height="40" rx="12" fill="#0C1425" stroke="#51426F"/>
     <text x="160" y="216" text-anchor="middle" class="chip" fill="#DDD6FE">Ctrl+Shift+S</text>
   </g>
@@ -93,9 +93,9 @@
     <circle cx="48" cy="40" r="20" fill="#60A5FA" fill-opacity="0.14"/>
     <text x="48" y="48" text-anchor="middle" class="step" fill="#93C5FD">3</text>
     <path d="M255 29h35v23h-21l-10 7v-7h-4z" fill="none" stroke="#93C5FD" stroke-width="2.5" stroke-linejoin="round"/>
-    <text x="28" y="92" class="card-title">Send the detour</text>
-    <text x="28" y="131" class="card-copy">Type and send</text>
-    <text x="28" y="166" class="card-copy">another message.</text>
+    <text x="28" y="92" class="card-title">Send a message</text>
+    <text x="28" y="131" class="card-copy">Write a message.</text>
+    <text x="28" y="166" class="card-copy">Send the message.</text>
     <rect x="28" y="188" width="264" height="40" rx="12" fill="#0C1425" stroke="#293750"/>
     <text x="160" y="216" text-anchor="middle" class="chip" fill="#93C5FD">YOUR MESSAGE</text>
   </g>
@@ -106,9 +106,9 @@
     <circle cx="48" cy="40" r="20" fill="#86EFAC" fill-opacity="0.14"/>
     <text x="48" y="48" text-anchor="middle" class="step" fill="#86EFAC">4</text>
     <path d="M258 41l10 10 21-23" fill="none" stroke="#86EFAC" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="28" y="92" class="card-title">Bring it back</text>
-    <text x="28" y="131" class="card-copy">Restore one draft,</text>
-    <text x="28" y="166" class="card-copy">or choose a stash.</text>
+    <text x="28" y="92" class="card-title">Restore a draft</text>
+    <text x="28" y="131" class="card-copy">Select a draft when</text>
+    <text x="28" y="166" class="card-copy">the picker opens.</text>
     <rect x="28" y="188" width="264" height="40" rx="12" fill="#0C1425" stroke="#315A48"/>
     <text x="160" y="216" text-anchor="middle" class="chip" fill="#86EFAC">Ctrl+Shift+R</text>
   </g>
