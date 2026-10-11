@@ -1,81 +1,62 @@
 # pi-stash
 
-`pi-stash` is a `pi` extension for parking an in-progress draft, sending something else, then restoring the draft afterward.
+Pi Stash saves the draft you're typing in [Pi](https://github.com/earendil-works/pi) so you can send another message and return to it later. Use it when a quick question or correction interrupts a longer prompt.
 
-## Requirements
+![Four-step Pi Stash workflow: write a draft, save it and clear the editor with Ctrl+Shift+S, send another message, then restore or choose a draft with Ctrl+Shift+R.](.github/readme/draft-workflow.png)
 
-- Pi 1.0.0 or later as the support floor; qualification requires the latest stable official Pi and latest maintained fork `main`, resolving version/commit once per workflow run and retaining exact SDK/CLI evidence. Locked development dependencies are reproducible snapshots, not validation targets
-- Node.js `>=24.15.0` and npm for local development
+Park your draft, send the interruption, then bring the draft back into the editor.
 
 ## Install
 
-From npm:
+Requires Pi 1.0.0 or later and Node.js 24.15.0 or later.
 
 ```bash
 pi install npm:@fitchmultz/pi-stash
 ```
 
-From GitHub:
+Restart Pi after installing or updating. Then try the [draft workflow](#usage) below.
+
+You can also install from GitHub:
 
 ```bash
 pi install https://github.com/fitchmultz/pi-stash
 ```
 
-For local development:
-
-```bash
-npm install
-pi install .
-```
-
-Restart Pi after installing or updating the extension.
-
 ## Usage
 
-1. Start typing a draft.
-2. Press `Ctrl+Shift+S`.
-3. Type and send the interrupting message.
-4. Press `Ctrl+Shift+R`.
-5. If needed, pick a different stash with the arrow keys or delete one with `Ctrl+D`.
-6. Keep going with the restored draft.
+1. Start typing a draft, such as a detailed code-review request.
+2. Press Ctrl+Shift+S to save it and clear the editor.
+3. Type and send your other message.
+4. Press Ctrl+Shift+R to bring the draft back. If you have several stashes, choose one from the picker.
+5. Continue editing and send when you're ready.
+
+Restoring into an editor that already has text pastes the draft into that text. A restored draft is removed from the stash. The footer shows how many drafts are saved.
 
 ## Commands and shortcuts
 
-- `Ctrl+Shift+S` or `/stash` — stash the editor text and clear the editor
-- `/stash some text` — stash explicit text exactly as provided, including leading or trailing whitespace
-- `Ctrl+Shift+R` — restore the only stash, or open a picker when there are several
-- `/stash-list` — browse, restore (`Enter`), delete (`Ctrl+D`), or clear all (`Ctrl+X`)
+| Action | Shortcut or command |
+| --- | --- |
+| Save the current draft and clear the editor | Ctrl+Shift+S or `/stash` |
+| Save specific text without clearing the editor | `/stash some text` |
+| Restore the only draft, or choose from several | Ctrl+Shift+R |
+| Browse, restore, or delete saved drafts | `/stash-list` |
 
-## Behavior
+In the picker, use ↑/↓ to choose a draft, Enter to restore, and Esc to cancel. Ctrl+D deletes the selected draft. Ctrl+X asks before clearing all drafts. The picker follows Pi's navigation and confirmation keybindings.
 
-- Stashes form a newest-first stack of up to 10 drafts per working directory, like `git stash` for the editor.
-- The stack is saved to `~/.pi/agent/pi-stash/<hash of the directory>.json` (or under `PI_CODING_AGENT_DIR`) on every change. It survives restarts, crashes, and new sessions, and every Pi window and session in the same directory shares it.
-- Restoring pastes into existing editor text instead of replacing it. RPC clients cannot merge, so they confirm before replacing the editor, and `/stash-list` prints a summary instead of the picker.
-- Stash, restore, and picker actions run one at a time. Session shutdown, replacement or tree navigation dismisses an open picker or confirmation without changing the stash.
-- The picker uses native keybindings and, in fullscreen, native mouse selection. Regular mode retains keyboard selection and terminal-owned scrollback.
-- A footer status shows how many drafts are stashed.
-- Versions before `0.3.0` stored stashes inside each session. Opening such a session imports its drafts into the project stack once.
+If your terminal doesn't pass a shortcut through, use `/stash` or `/stash-list`.
 
-For latest-host qualification, run `node /path/to/automation/scripts/qualify.mjs --repo pi-stash --source "$PWD" --host official --target latest --output /tmp/pi-stash-official`, then qualify the packed latest maintained fork with `--host fork --target /path/to/fork-package`. Plain `npm ci` checks only the locked development snapshot, not latest qualification.
+## Your saved drafts
 
-## Automatic npm releases (maintainers)
+You can keep up to 10 drafts per working directory, newest first. Saving an 11th drops the oldest. Blank drafts are ignored; `/stash some text` keeps leading and trailing whitespace.
 
-Follow the [shared release procedure](https://github.com/fitchmultz/.github#automatic-npm-releases): merge a reviewed PR into `main` with an intentional `package.json` version bump and a matching versioned `CHANGELOG.md` section. Once configured and enabled, publication is unattended after the existing compatibility checks and candidate-tarball qualification pass. Complete any applicable package-specific release evidence before merging the bump. Automation never bumps versions, overwrites releases, or republishes an existing version; existing manual publisher instructions remain valid.
+Drafts are saved locally on every change, so they're still there after a restart or crash. Pi windows and sessions in the same directory share them. Avoid changing the stash in two windows at once: the last write wins.
 
-Failed/unpublished candidates can retry daily at 12:17 UTC or via manual dispatch of `npm release` on `main`, without another bump. Set repository variable `NPM_RELEASE_ENABLED` to anything other than `true` to stop new release plans; cancel pending runs separately when needed. Workflow validation is not evidence of a completed real OIDC publication.
+Saved drafts are unencrypted JSON in your Pi agent directory. The [storage and client reference](docs/reference.md) has the file locations, behavior in other clients, and details on importing drafts from older versions.
 
 ## Development
 
-`pi` loads the extension's TypeScript directly; Node 24 runs the tests without a build step.
+The [development guide](docs/development.md) covers local installation, tests, host compatibility checks, and the automatic npm release procedure.
 
-```bash
-npm run check         # typecheck + tests + pack dry-run
-npm run smoke         # isolated pi install, stash, list, and restart through the real CLI
-npm run check:compat  # check + smoke; the contract GitHub runs against official Pi and the fork
-```
+[Changelog](CHANGELOG.md) · [Report a problem](https://github.com/fitchmultz/pi-stash/issues)
 
-`test/native-ui.test.ts` loads the extension through the standalone SDK and native `InteractiveMode`. It checks fullscreen and regular shortcuts, draft merging, picker cancellation and mouse selection, and fork/resume/reload restoration. The tests use an isolated profile and memory terminal, with no model or clipboard calls.
-
-Default-limit assertions use the documented ten-draft contract, not the production constant they are checking.
-
-The smoke test uses an isolated HOME and agent directory. It resolves the installed host's `bin.pi` (or `PI_HOST_CLI` during qualification); set `PI_BIN` to run it against another `pi` executable.
+[MIT license](LICENSE) · Created by [Mitch Fultz](https://github.com/fitchmultz)
