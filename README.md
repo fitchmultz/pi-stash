@@ -4,8 +4,6 @@ Pi Stash is a [Pi](https://github.com/earendil-works/pi) extension that saves ed
 
 ![Pi Stash saves a draft before you send another message, then restores the draft to the editor.](.github/readme/draft-workflow.png)
 
-The diagram shows how to save and restore a draft in Pi.
-
 ## Install
 
 Use Pi 1.0.0 or later and Node.js 24.15.0 or later.
