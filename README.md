@@ -24,6 +24,8 @@ See the [development guide](docs/development.md) for GitHub and local installati
 4. Press Ctrl+Shift+R to restore a draft.
 5. Continue to edit the draft.
 
+These steps use the default shortcuts.
+
 Pi Stash opens a picker when more than one draft exists. In the picker, press Enter to restore the selected draft.
 
 Pi Stash removes a draft from storage after you restore it. If the editor contains text, Pi Stash pastes the draft into that text.
@@ -41,6 +43,8 @@ The footer shows the saved draft count.
 The picker uses Pi's navigation and confirmation keys. Press Ctrl+D to delete the selected draft. Press Ctrl+X to clear all drafts after confirmation.
 
 If a shortcut does not work in your terminal, use `/stash` or `/stash-list`.
+
+Configure or disable shortcuts in `pi-stash.json` in your Pi agent directory. See [shortcut configuration](docs/reference.md#shortcut-configuration) for the format and an example.
 
 ## Saved drafts
 

@@ -2,6 +2,27 @@
 
 [Back to the README](../README.md)
 
+## Shortcut configuration
+
+Create `pi-stash.json` in your Pi agent directory. The default path is `~/.pi/agent/pi-stash.json`. If `PI_CODING_AGENT_DIR` is set, use that directory instead.
+
+```json
+{
+  "shortcuts": {
+    "stash": "ctrl+s",
+    "restore": "ctrl+shift+r"
+  }
+}
+```
+
+Values use Pi keybinding strings, such as `ctrl+s`, `ctrl+shift+s`, or `alt+r`. Use different keys for stash and restore. Do not add surrounding whitespace.
+
+Set a shortcut to `false` to disable it. `/stash` and `/stash-list` remain available. Omitted values keep the defaults: `ctrl+shift+s` for stash and `ctrl+shift+r` for restore. A missing file also keeps these defaults.
+
+Restart Pi after you change the file.
+
+Invalid JSON and unsupported shortcut value types cause an extension load error. The extension accepts nonblank strings without validating their keybinding syntax.
+
 ## Project-wide storage
 
 Stashes form a newest-first stack of up to 10 drafts per working directory. Adding a draft at the limit drops the oldest and shows a notification.
@@ -24,7 +45,7 @@ An unreadable or invalid stash file causes an error instead of being overwritten
 
 Restoring into an empty interactive editor sets its text to the draft. If the editor already contains text, restoring pastes the draft into it. A successful restore removes that draft from the stash.
 
-With one draft, **Ctrl+Shift+R** restores it directly. With several, it opens a picker. `/stash-list` always opens the picker when drafts are available. The default picker keys are **↑/↓** to select a draft, **Enter** to restore it, and **Esc** to cancel. The picker supports native Pi selection and confirmation keybindings, plus **Ctrl+D** to delete the selection and **Ctrl+X** to clear all after confirmation.
+With one draft, the restore shortcut restores it directly. With several, it opens a picker. `/stash-list` always opens the picker when drafts are available. The default picker keys are **↑/↓** to select a draft, **Enter** to restore it, and **Esc** to cancel. The picker supports native Pi selection and confirmation keybindings, plus **Ctrl+D** to delete the selection and **Ctrl+X** to clear all after confirmation.
 
 Fullscreen Pi supports native mouse selection. Regular mode retains keyboard selection and terminal-owned scrollback.
 
