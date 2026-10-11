@@ -1,92 +1,67 @@
 # pi-stash
 
-`pi-stash` is a `pi` extension for parking an in-progress draft, sending something else, then restoring the draft afterward.
+Pi Stash is a [Pi](https://github.com/earendil-works/pi) extension that saves editor drafts. Use it to save a draft before you send another message.
 
-## Requirements
-
-- Pi 1.0.0 or later; development baseline official `1.0.0`, with separate maintained-fork qualification
-- Node.js `>=24.15.0` and npm for local development
+![Pi Stash saves a draft before you send another message, then restores the draft to the editor.](.github/readme/draft-workflow.png)
 
 ## Install
 
-From npm:
+Use Pi 1.0.0 or later and Node.js 24.15.0 or later.
 
 ```bash
 pi install npm:@fitchmultz/pi-stash
 ```
 
-From GitHub:
+Restart Pi after you install or update the extension.
 
-```bash
-pi install https://github.com/fitchmultz/pi-stash
-```
-
-For local development:
-
-```bash
-npm install
-pi install .
-```
-
-Restart Pi after installing or updating the extension.
+See the [development guide](docs/development.md) for GitHub and local installation.
 
 ## Usage
 
-1. Start typing a draft.
-2. Press `Ctrl+Shift+S`.
-3. Type and send the interrupting message.
-4. Press `Ctrl+Shift+R`.
-5. If needed, pick a different stash with the arrow keys or delete one with `Ctrl+D`.
-6. Keep going with the restored draft.
+1. Write a draft in the editor.
+2. Press Ctrl+Shift+S to save the draft and clear the editor.
+3. Send another message.
+4. Press Ctrl+Shift+R to restore a draft.
+5. Continue to edit the draft.
+
+These steps use the default shortcuts.
+
+Pi Stash opens a picker when more than one draft exists. In the picker, press Enter to restore the selected draft.
+
+Pi Stash removes a draft from storage after you restore it. If the editor contains text, Pi Stash pastes the draft into that text.
+
+The footer shows the saved draft count.
 
 ## Commands and shortcuts
 
-- `Ctrl+Shift+S` or `/stash` — stash the editor text and clear the editor
-- `/stash some text` — stash explicit text exactly as provided, including leading or trailing whitespace
-- `Ctrl+Shift+R` — restore the only stash, or open a picker when there are several
-- `/stash-list` — browse, restore (`Enter`), delete (`Ctrl+D`), or clear all (`Ctrl+X`)
+| Shortcut or command | Action |
+| --- | --- |
+| `/stash` | Saves the editor draft and clears the editor |
+| `/stash some text` | Saves the supplied text and leaves the editor unchanged |
+| `/stash-list` | Opens the picker to restore or delete drafts |
 
-## Shortcut configuration
+The picker uses Pi's navigation and confirmation keys. Press Ctrl+D to delete the selected draft. Press Ctrl+X to clear all drafts after confirmation.
 
-Both shortcuts are configurable via `pi-stash.json` in the agent directory
-(`~/.pi/agent/pi-stash.json`, or under `PI_CODING_AGENT_DIR` when set):
+If a shortcut does not work in your terminal, use `/stash` or `/stash-list`.
 
-```json
-{
-  "shortcuts": {
-    "stash": "ctrl+s",
-    "restore": "ctrl+shift+r"
-  }
-}
-```
+Configure or disable shortcuts in `pi-stash.json` in your Pi agent directory. See [shortcut configuration](docs/reference.md#shortcut-configuration) for the format and an example.
 
-Values use the same format as pi keybindings (e.g. `ctrl+s`, `ctrl+shift+s`, `alt+r`).
-Set a shortcut to `false` to disable it and use the `/stash` commands instead.
-Omitted values keep the defaults (`ctrl+shift+s` / `ctrl+shift+r`).
-Restart Pi after changing the file.
+## Saved drafts
 
-## Behavior
+Pi Stash stores up to 10 drafts per working directory, newest first. A new draft replaces the oldest draft when the list is full. Save important drafts elsewhere before you reach this limit.
 
-- Stashes form a newest-first stack of up to 10 drafts per working directory, like `git stash` for the editor.
-- The stack is saved to `~/.pi/agent/pi-stash/<hash of the directory>.json` (or under `PI_CODING_AGENT_DIR`) on every change. It survives restarts, crashes, and new sessions, and every Pi window and session in the same directory shares it.
-- Restoring pastes into existing editor text instead of replacing it. RPC clients cannot merge, so they confirm before replacing the editor, and `/stash-list` prints a summary instead of the picker.
-- Stash, restore, and picker actions run one at a time. Session shutdown, replacement or tree navigation dismisses an open picker or confirmation without changing the stash.
-- The picker uses native keybindings and, in fullscreen, native mouse selection. Regular mode retains keyboard selection and terminal-owned scrollback.
-- A footer status shows how many drafts are stashed.
-- Versions before `0.3.0` stored stashes inside each session. Opening such a session imports its drafts into the project stack once.
+Pi Stash saves drafts as unencrypted JSON in your Pi agent directory. Saved drafts remain available after a restart or crash.
+
+Pi windows and sessions in the same working directory share saved drafts. Simultaneous changes in separate windows can overwrite drafts. Change saved drafts from one window at a time.
+
+Pi Stash ignores blank drafts. The `/stash some text` command preserves leading and trailing whitespace.
+
+See the [storage and client reference](docs/reference.md) for file locations, client behavior, and imports from older versions.
 
 ## Development
 
-`pi` loads the extension's TypeScript directly; Node 24 runs the tests without a build step.
+See the [development guide](docs/development.md) for tests, compatibility checks, and releases.
 
-```bash
-npm run check         # typecheck + tests + pack dry-run
-npm run smoke         # isolated pi install, stash, list, and restart through the real CLI
-npm run check:compat  # check + smoke; the contract GitHub runs against official Pi and the fork
-```
+[Changelog](CHANGELOG.md) · [Report a problem](https://github.com/fitchmultz/pi-stash/issues)
 
-`test/native-ui.test.ts` loads the extension through the standalone SDK and native `InteractiveMode`. It checks fullscreen and regular shortcuts, draft merging, picker cancellation and mouse selection, and fork/resume/reload restoration. The tests use an isolated profile and memory terminal, with no model or clipboard calls.
-
-Default-limit assertions use the documented ten-draft contract, not the production constant they are checking.
-
-The smoke test uses an isolated HOME and agent directory. It resolves the installed host's `bin.pi` (or `PI_HOST_CLI` during qualification); set `PI_BIN` to run it against another `pi` executable.
+[MIT license](LICENSE) · Created by [Mitch Fultz](https://github.com/fitchmultz)
