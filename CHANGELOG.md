@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- Settle open stash pickers when Pi disposes their UI during reload, without changing saved drafts or skipping other dialogs' cleanup ([#37](https://github.com/fitchmultz/pi-stash/issues/37)).
+
 ## 0.4.0 - 2026-10-01
 
 - Require and qualify Pi 1.0.0; use the host renderer in default fullscreen and regular mode.
