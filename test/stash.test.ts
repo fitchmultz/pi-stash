@@ -8,7 +8,7 @@
 
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test, { after } from "node:test";
@@ -271,12 +271,56 @@ test("an unreadable or unwritable stash file keeps the editor draft and the file
 	process.env.PI_CODING_AGENT_DIR = blocked;
 	try {
 		context.ctx.ui.setEditorText("");
-		await assert.rejects(harness.commands.get("stash")!.handler("keep explicit text", context.ctx), { code: "ENOTDIR" });
+		await assert.rejects(harness.commands.get("stash")!.handler("keep explicit text", context.ctx), { code: "EEXIST" });
 		assert.equal(context.editorText, "keep explicit text");
 	} finally {
 		process.env.PI_CODING_AGENT_DIR = agentDir;
 		rmSync(blocked, { recursive: true, force: true });
 	}
+});
+
+test("a held lock is never stolen, and failed saves preserve editor and stored drafts", async () => {
+	const cwd = `/project/${randomUUID()}`;
+	await seed(cwd, "already saved");
+	const lock = `${stashPath(cwd)}.lock`;
+	mkdirSync(lock);
+	utimesSync(lock, new Date(0), new Date(0));
+	const harness = createHarness();
+	const context = createContext({ cwd, mode: "tui", editorText: "keep editor draft" });
+	try {
+		await assert.rejects(harness.shortcuts.get("ctrl+shift+s")!.handler(context.ctx), { code: "EEXIST" });
+		assert.equal(context.editorText, "keep editor draft");
+		assert.deepEqual(storedDrafts(cwd), ["already saved"]);
+		assert.equal(existsSync(lock), true);
+		assert.deepEqual(context.notifications, []);
+		assert.deepEqual(context.statuses, []);
+
+		context.ctx.ui.setEditorText("");
+		await assert.rejects(harness.commands.get("stash")!.handler("keep explicit draft", context.ctx), { code: "EEXIST" });
+		assert.equal(context.editorText, "keep explicit draft");
+		assert.deepEqual(storedDrafts(cwd), ["already saved"]);
+		assert.deepEqual(context.notifications, []);
+	} finally {
+		rmdirSync(lock);
+	}
+	await harness.shortcuts.get("ctrl+shift+s")!.handler(context.ctx);
+	assert.equal(context.editorText, "");
+	assert.deepEqual(storedDrafts(cwd), ["keep explicit draft", "already saved"]);
+});
+
+test("a failed read releases the lock without reporting success or clearing the editor", async () => {
+	const cwd = `/project/${randomUUID()}`;
+	mkdirSync(stashPath(cwd));
+	const harness = createHarness();
+	const context = createContext({ cwd, mode: "tui", editorText: "keep this draft" });
+	await assert.rejects(harness.shortcuts.get("ctrl+shift+s")!.handler(context.ctx), { code: "EISDIR" });
+	assert.equal(context.editorText, "keep this draft");
+	assert.deepEqual(context.notifications, []);
+	assert.equal(existsSync(`${stashPath(cwd)}.lock`), false);
+	rmdirSync(stashPath(cwd));
+	await harness.shortcuts.get("ctrl+shift+s")!.handler(context.ctx);
+	assert.equal(context.editorText, "");
+	assert.deepEqual(storedDrafts(cwd), ["keep this draft"]);
 });
 
 test("/stash preserves explicit whitespace exactly", async () => {

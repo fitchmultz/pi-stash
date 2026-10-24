@@ -52,7 +52,7 @@ Pi Stash stores up to 10 drafts per working directory, newest first. A new draft
 
 Pi Stash saves drafts as unencrypted JSON in your Pi agent directory. Saved drafts remain available after a restart or crash.
 
-Pi windows and sessions in the same working directory share saved drafts. Simultaneous changes in separate windows can overwrite drafts. Change saved drafts from one window at a time.
+Pi windows and sessions in the same working directory share saved drafts. Changes from separate windows are serialized. All windows must use a version with cross-window locking for that protection.
 
 Pi Stash ignores blank drafts. The `/stash some text` command preserves leading and trailing whitespace.
 

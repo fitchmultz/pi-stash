@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- Serialize project stash mutations across Pi processes so simultaneous saves do not overwrite drafts below the ten-draft limit ([#36](https://github.com/fitchmultz/pi-stash/issues/36)).
+
 ## 0.4.0 - 2026-10-01
 
 - Require and qualify Pi 1.0.0; use the host renderer in default fullscreen and regular mode.
