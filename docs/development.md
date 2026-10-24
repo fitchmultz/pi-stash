@@ -33,7 +33,7 @@ npm run smoke         # isolated pi install, stash, list, and restart through th
 npm run check:compat  # check + smoke; used during host qualification
 ```
 
-`test/native-ui.test.ts` loads the extension through the standalone SDK and native `InteractiveMode`. It checks fullscreen and regular shortcuts, draft merging, picker cancellation and mouse selection, and fork/resume/reload restoration. Reload coverage keeps a picker and a second dialog open to verify command settlement, cleanup, and draft preservation. The tests use an isolated profile and memory terminal, with no model or clipboard calls.
+`test/native-ui.test.ts` loads the extension through the standalone SDK and native `InteractiveMode`. It checks fullscreen and regular shortcuts, draft merging, picker cancellation and mouse selection, and fork/resume/reload restoration. Reload coverage verifies command settlement and draft preservation with a picker open. On Pi 1.4 and later, it also keeps a second dialog open to check native dialog-stack cleanup. The tests use an isolated profile and memory terminal, with no model or clipboard calls.
 
 Default-limit assertions use the documented ten-draft contract, not the production constant they are checking.
 
