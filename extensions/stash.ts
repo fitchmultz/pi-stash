@@ -7,7 +7,7 @@
  */
 
 import { createHash, randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -107,7 +107,6 @@ function loadDrafts(cwd: string): string[] {
 
 function saveDrafts(cwd: string, drafts: readonly string[]): void {
 	const file = stashFile(cwd);
-	mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
 	const temporary = `${file}.${randomUUID()}.tmp`;
 	try {
 		writeFileSync(temporary, `${JSON.stringify({ cwd, drafts })}\n`, { mode: 0o600 });
@@ -121,10 +120,27 @@ function updateStatus(ctx: ExtensionContext, drafts: readonly string[]): void {
 	ctx.ui.setStatus("pi-stash", drafts.length === 0 ? undefined : ctx.ui.theme.fg("accent", `📦 ${countLabel(drafts.length)}`));
 }
 
-// ponytail: unlocked read-modify-write; two windows mutating in the same instant resolve last-writer-wins. Add a lockfile if that ever loses a draft.
 function updateDrafts(ctx: ExtensionContext, update: (drafts: string[]) => string[]): string[] {
-	const drafts = update(loadDrafts(ctx.cwd));
-	saveDrafts(ctx.cwd, drafts);
+	const lock = `${stashFile(ctx.cwd)}.lock`;
+	mkdirSync(dirname(lock), { recursive: true, mode: 0o700 });
+	const wait = new Int32Array(new SharedArrayBuffer(4));
+	for (let attempt = 0; ; attempt++) {
+		try {
+			mkdirSync(lock, { mode: 0o700 });
+			break;
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "EEXIST" || attempt === 50) throw error;
+			// Only mkdir grants ownership. Never reclaim by age: the owner may just be paused.
+			Atomics.wait(wait, 0, 0, 20);
+		}
+	}
+	let drafts: string[];
+	try {
+		drafts = update(loadDrafts(ctx.cwd));
+		saveDrafts(ctx.cwd, drafts);
+	} finally {
+		rmdirSync(lock);
+	}
 	updateStatus(ctx, drafts);
 	return drafts;
 }
@@ -171,13 +187,15 @@ async function restoreDraft(ctx: ExtensionContext, draft: string, interaction: A
 			ctx.ui.notify("Restore cancelled", "info");
 			return;
 		}
-		ctx.ui.setEditorText(draft);
-	} else if (isBlankDraft(ctx.ui.getEditorText())) {
-		ctx.ui.setEditorText(draft);
-	} else {
-		ctx.ui.pasteToEditor(draft);
 	}
-	updateDrafts(ctx, (current) => withoutDraft(current, draft));
+	updateDrafts(ctx, (current) => {
+		if (ctx.mode === "rpc" || isBlankDraft(ctx.ui.getEditorText())) {
+			ctx.ui.setEditorText(draft);
+		} else {
+			ctx.ui.pasteToEditor(draft);
+		}
+		return withoutDraft(current, draft);
+	});
 	ctx.ui.notify(`Restored draft: ${previewDraft(draft)}`, "info");
 }
 
