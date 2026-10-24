@@ -453,6 +453,49 @@ test("state mutations remain serialized while a picker is pending", async () => 
 	assert.deepEqual(storedDrafts(cwd), ["queued", "latest", "older"]);
 });
 
+test("disposed pickers cancel once and invalidate queued work despite stale keys", async () => {
+	initTheme();
+	const cwd = `/project/${randomUUID()}`;
+	await seed(cwd, "older", "latest");
+	const harness = createHarness();
+	const opened = Promise.withResolvers<void>();
+	const completions: unknown[] = [];
+	let component: { dispose(): void; handleInput(data: string): void };
+	const context = createContext({
+		cwd,
+		mode: "tui",
+		editorText: "keep editor draft",
+		custom: <T>(renderer: Parameters<TestUI["custom"]>[0]) =>
+			new Promise<T | undefined>((resolve) => {
+				component = renderer(
+					{ requestRender() {} },
+					{ fg: (_name: string, value: string) => value, bold: (value: string) => value },
+					{},
+					(value) => {
+						completions.push(value);
+						component.dispose();
+						resolve(value as T);
+					},
+				) as typeof component;
+				opened.resolve();
+			}),
+	});
+	const picker = harness.commands.get("stash-list")!.handler("", context.ctx);
+	await opened.promise;
+	const queuedStash = harness.commands.get("stash")!.handler("must not survive shutdown", context.ctx);
+	component!.dispose();
+	component!.dispose();
+	for (const key of ["\r", "\x04", "\x18", "\x1b"]) component!.handleInput(key);
+	await Promise.all([picker, queuedStash]);
+	assert.deepEqual(completions, [{ action: "cancel" }]);
+	assert.deepEqual(storedDrafts(cwd), ["latest", "older"]);
+	assert.equal(context.editorText, "keep editor draft");
+	await harness.commands.get("stash")!.handler("fresh after disposal", context.ctx);
+	assert.deepEqual(storedDrafts(cwd), ["fresh after disposal", "latest", "older"]);
+	await harness.events.get("session_shutdown")!({}, context.ctx);
+	assert.deepEqual(completions, [{ action: "cancel" }]);
+});
+
 test("session shutdown closes a rendered picker, clears status, and invalidates queued mutations", async () => {
 	initTheme();
 	const cwd = `/project/${randomUUID()}`;

@@ -223,7 +223,15 @@ async function showDraftPicker(
 	const items = buildDraftItems(drafts);
 
 	const picker = ctx.ui.custom<DraftPickerResult>((tui, theme, _keybindings, done) => {
-		const abort = () => done({ action: "cancel" });
+		let settled = false;
+		const finish = (result: DraftPickerResult, defer = false) => {
+			if (settled) return;
+			settled = true;
+			interaction.signal.removeEventListener("abort", abort);
+			if (defer) queueMicrotask(() => done(result));
+			else done(result);
+		};
+		const abort = () => finish({ action: "cancel" });
 		if (interaction.signal.aborted) abort();
 		else interaction.signal.addEventListener("abort", abort, { once: true });
 		const container = new Container();
@@ -238,8 +246,8 @@ async function showDraftPicker(
 			noMatch: (text) => theme.fg("warning", text),
 		});
 		selectList.setSelectedIndex(clampSelectedIndex(selectedIndex, items.length));
-		selectList.onSelect = (item) => done({ action: "restore", index: Number(item.value) });
-		selectList.onCancel = () => done({ action: "cancel" });
+		selectList.onSelect = (item) => finish({ action: "restore", index: Number(item.value) });
+		selectList.onCancel = () => finish({ action: "cancel" });
 		container.addChild(selectList);
 
 		container.addChild(
@@ -268,16 +276,21 @@ async function showDraftPicker(
 			handleMouse(event) {
 				return container.handleMouse(event);
 			},
-			dispose: () => interaction.signal.removeEventListener("abort", abort),
+			dispose() {
+				if (settled) return;
+				// done removes a dialog; let the host finish iterating before it runs.
+				finish({ action: "cancel" }, true);
+				interaction.abort();
+			},
 			handleInput(data: string) {
 				if (matchesKey(data, Key.ctrl("d"))) {
 					const selected = selectList.getSelectedItem();
-					if (selected) done({ action: "delete", index: Number(selected.value) });
+					if (selected) finish({ action: "delete", index: Number(selected.value) });
 					return;
 				}
 
 				if (matchesKey(data, Key.ctrl("x"))) {
-					done({ action: "clear" });
+					finish({ action: "clear" });
 					return;
 				}
 
@@ -393,7 +406,11 @@ export default function piStash(pi: ExtensionAPI): void {
 			try {
 				await operation(interaction);
 			} finally {
-				if (pendingInteraction === interaction) pendingInteraction = undefined;
+				if (pendingInteraction === interaction) {
+					pendingInteraction = undefined;
+					// Native disposal can cancel before the host emits session_shutdown.
+					if (interaction.signal.aborted) generation++;
+				}
 			}
 		});
 
