@@ -37,13 +37,15 @@ If `PI_CODING_AGENT_DIR` is set, the `pi-stash` directory lives under that agent
 
 Saved drafts survive Pi restarts, crashes, and new sessions, including drafts saved before the first message in a new session. All Pi windows and sessions using the same working directory and agent directory share the stack. The footer count updates when that window reads or changes the stash.
 
-Every mutation re-reads the file, then writes a temporary file and renames it into place. Stash, restore, and picker actions run one at a time within a Pi instance. There is no cross-window lock: changes made at the same instant can still resolve last-writer-wins. Avoid simultaneous edits to the stash from separate windows.
+Every mutation holds an exclusive `<hash>.json.lock` directory while it re-reads the file, updates the stack, and renames a temporary file into place. Stash, restore, and picker actions also run one at a time within a Pi instance. All windows must use a version with this locking behavior. Older versions do not honor the lock.
+
+A busy lock is retried for about one second, then the operation fails without clearing the source editor or reporting success. This wait is synchronous. A lock is never removed because of its age, since its owner might be paused. A process killed during a mutation can leave an empty lock directory. To recover, first close every Pi process that uses that agent directory, then remove only the affected empty `<hash>.json.lock` directory. Keep the JSON stash file and any temporary draft files.
 
 An unreadable or invalid stash file causes an error instead of being overwritten. Stashing the editor saves the draft before clearing the editor, so a failed save leaves your current text in place.
 
 ## Editor and picker behavior
 
-Restoring into an empty interactive editor sets its text to the draft. If the editor already contains text, restoring pastes the draft into it. A successful restore removes that draft from the stash.
+Restoring into an empty interactive editor sets its text to the draft. If the editor already contains text, restoring pastes the draft into it. Restores acquire the storage lock before changing the editor and remove the stored draft only after the editor write succeeds.
 
 With one draft, the restore shortcut restores it directly. With several, it opens a picker. `/stash-list` always opens the picker when drafts are available. The default picker keys are **↑/↓** to select a draft, **Enter** to restore it, and **Esc** to cancel. The picker supports native Pi selection and confirmation keybindings, plus **Ctrl+D** to delete the selection and **Ctrl+X** to clear all after confirmation.
 

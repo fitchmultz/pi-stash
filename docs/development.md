@@ -37,7 +37,7 @@ npm run check:compat  # check + smoke; used during host qualification
 
 Default-limit assertions use the documented ten-draft contract, not the production constant they are checking.
 
-The smoke test uses an isolated HOME and agent directory. It resolves the installed host's `bin.pi`, or `PI_HOST_CLI` during qualification. Set `PI_BIN` to run a standalone smoke against another Pi executable; that override does not apply during host qualification.
+The smoke test uses an isolated HOME and agent directory. It checks shared drafts from eight independent native RPC processes, then checks persistence after restart. It resolves the installed host's `bin.pi`, or `PI_HOST_CLI` during qualification. Set `PI_BIN` to run a standalone smoke against another Pi executable; that override does not apply during host qualification.
 
 ## Latest-host qualification
 

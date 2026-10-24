@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
 const hostDir = resolve(dirname(fileURLToPath(import.meta.resolve("@earendil-works/pi-coding-agent"))), "..");
@@ -73,12 +73,44 @@ try {
 	);
 	assert.ok(!events.some((event) => event.type === "agent_start" || event.type === "extension_error"), stdout);
 
+	const concurrentDrafts = Array.from({ length: 8 }, (_, index) => `native-window-${index}`);
+	const saves = await Promise.allSettled(concurrentDrafts.map((draft) => new Promise((resolve, reject) => {
+		const child = spawn(pi, useBinOverride ? args : [cli, ...args], {
+			cwd: home, timeout: 20_000,
+			env: {
+				HOME: home, PATH: process.env.PATH ?? "", TMPDIR: join(home, "tmp"),
+				PI_CODING_AGENT_DIR: agentDir, PI_OFFLINE: "1", PI_TELEMETRY: "0", PI_SKIP_VERSION_CHECK: "1",
+			},
+		});
+		let stdout = "";
+		let stderr = "";
+		child.stdout.setEncoding("utf8").on("data", (data) => { stdout += data; });
+		child.stderr.setEncoding("utf8").on("data", (data) => { stderr += data; });
+		child.on("error", reject);
+		child.on("close", (code) => {
+			try {
+				assert.equal(code, 0, stderr);
+				const events = stdout.trim().split("\n").map((line) => JSON.parse(line));
+				assert.deepEqual(events.filter((event) => event.type === "response").map((event) => [event.id, event.success]), [[draft, true]]);
+				assert.ok(!events.some((event) => event.type === "agent_start" || event.type === "extension_error"), stdout);
+				resolve();
+			} catch (error) { reject(error); }
+		});
+		child.stdin.end(`${JSON.stringify({ id: draft, type: "prompt", message: `/stash ${draft}` })}\n`);
+	})));
+	assert.deepEqual(saves.filter((save) => save.status === "rejected"), []);
+	assert.deepEqual(
+		readdirSync(stashDir).map((file) => JSON.parse(readFileSync(join(stashDir, file), "utf8")).drafts.slice().sort()),
+		[["ci-draft", ...concurrentDrafts].sort()],
+	);
+	console.log("Eight independent native RPC processes preserved all drafts below the cap.");
+
 	const resumed = run([...args, "-c"], `${JSON.stringify({ id: "resume", type: "prompt", message: "/stash-list" })}\n`);
 	const resumedEvents = resumed.trim().split("\n").map((line) => JSON.parse(line));
 	assert.ok(resumedEvents.some((event) =>
 		event.type === "extension_ui_request" &&
 		event.method === "notify" &&
-		event.message?.includes("1. ci-draft")
+		event.message?.includes("9. ci-draft")
 	), resumed);
 	assert.deepEqual(
 		resumedEvents.filter((event) => event.type === "response").map((event) => [event.id, event.success]),
