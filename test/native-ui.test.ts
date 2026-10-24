@@ -126,6 +126,41 @@ test("native stash shortcuts, picker mouse and replacement preserve drafts", { t
       assert.deepEqual(drafts(), ["newer mouse draft"]);
     });
 
+    // Regression for #37. Reload disposes custom UI before session_shutdown.
+    for (const tuiMode of ["fullscreen", "regular"] as const) {
+      await t.test(`${tuiMode} reload settles a picker and disposes the next dialog without changing drafts`, async () => {
+        (mode as unknown as { switchTuiMode(mode: string): boolean }).switchTuiMode(tuiMode);
+        context!.ui.setEditorText("preserved reload draft");
+        let settled = false;
+        const picker = runtime.session.prompt("/stash-list").then(() => { settled = true; });
+        await rendered();
+        assert.ok(screen().some((line) => line.includes("Stashed Drafts")));
+        const queuedStash = runtime.session.prompt("/stash must not survive reload");
+        let siblingDisposed = false;
+        const sibling = context!.ui.custom<void>((_tui, _theme, _keys, done) => ({
+          render: () => ["Sibling dialog"],
+          invalidate() {},
+          dispose() {
+            if (siblingDisposed) return;
+            siblingDisposed = true;
+            queueMicrotask(() => done());
+          },
+        }));
+        await rendered();
+        assert.ok(screen().some((line) => line.includes("Sibling dialog")));
+        await context!.reload();
+        await runtime.session.prompt("/qa-context");
+        assert.equal(context!.ui.getEditorText(), "preserved reload draft");
+        context!.ui.setEditorText("new session draft");
+        await rendered();
+        assert.equal(settled, true, "reload must settle the outgoing stash-list command");
+        assert.equal(siblingDisposed, true, "picker completion must not skip native sibling disposal");
+        await Promise.all([picker, queuedStash, sibling]);
+        assert.deepEqual(drafts(), ["newer mouse draft"]);
+        assert.equal(context!.ui.getEditorText(), "new session draft");
+      });
+    }
+
     await t.test("newSession cancels a pending picker; fork, resume and reload preserve disk drafts", async () => {
       const picker = runtime.session.prompt("/stash-list");
       await rendered();
