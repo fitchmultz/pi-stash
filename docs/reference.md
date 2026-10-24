@@ -45,7 +45,7 @@ An unreadable or invalid stash file causes an error instead of being overwritten
 
 ## Editor and picker behavior
 
-Restoring into an empty interactive editor sets its text to the draft. If the editor already contains text, restoring pastes the draft into it. A successful restore removes that draft from the stash.
+Restoring into an empty interactive editor sets its text to the draft. If the editor already contains text, restoring pastes the draft into it. Restores acquire the storage lock before changing the editor and remove the stored draft only after the editor write succeeds.
 
 With one draft, the restore shortcut restores it directly. With several, it opens a picker. `/stash-list` always opens the picker when drafts are available. The default picker keys are **↑/↓** to select a draft, **Enter** to restore it, and **Esc** to cancel. The picker supports native Pi selection and confirmation keybindings, plus **Ctrl+D** to delete the selection and **Ctrl+X** to clear all after confirmation.
 

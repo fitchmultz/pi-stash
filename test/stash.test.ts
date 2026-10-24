@@ -334,14 +334,20 @@ test("a busy restore lock leaves both TUI and confirmed RPC editors unchanged", 
 });
 
 test("an editor write failure does not remove the stored draft and releases the lock", async () => {
-	for (const mode of ["tui", "rpc"] as const) {
+	for (const options of [
+		{ mode: "tui" as const, editorText: "" },
+		{ mode: "tui" as const, editorText: "original editor" },
+		{ mode: "rpc" as const, editorText: "rpc original" },
+	]) {
 		const cwd = `/project/${randomUUID()}`;
 		await seed(cwd, "keep stored draft");
 		const harness = createHarness();
-		const context = createContext({ cwd, mode });
+		const context = createContext({ cwd, ...options });
 		const error = new Error("Editor unavailable");
 		context.ctx.ui.setEditorText = () => { throw error; };
+		context.ctx.ui.pasteToEditor = () => { throw error; };
 		await assert.rejects(harness.shortcuts.get("ctrl+shift+r")!.handler(context.ctx), error);
+		assert.equal(context.editorText, options.editorText);
 		assert.deepEqual(storedDrafts(cwd), ["keep stored draft"]);
 		assert.equal(existsSync(`${stashPath(cwd)}.lock`), false);
 		assert.deepEqual(context.notifications, []);

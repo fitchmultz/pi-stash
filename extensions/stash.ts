@@ -187,13 +187,15 @@ async function restoreDraft(ctx: ExtensionContext, draft: string, interaction: A
 			ctx.ui.notify("Restore cancelled", "info");
 			return;
 		}
-		ctx.ui.setEditorText(draft);
-	} else if (isBlankDraft(ctx.ui.getEditorText())) {
-		ctx.ui.setEditorText(draft);
-	} else {
-		ctx.ui.pasteToEditor(draft);
 	}
-	updateDrafts(ctx, (current) => withoutDraft(current, draft));
+	updateDrafts(ctx, (current) => {
+		if (ctx.mode === "rpc" || isBlankDraft(ctx.ui.getEditorText())) {
+			ctx.ui.setEditorText(draft);
+		} else {
+			ctx.ui.pasteToEditor(draft);
+		}
+		return withoutDraft(current, draft);
+	});
 	ctx.ui.notify(`Restored draft: ${previewDraft(draft)}`, "info");
 }
 
