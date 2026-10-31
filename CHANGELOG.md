@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.4.2 - 2026-10-31
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- Automate reviewed npm patch releases (#42) ([b9d73fb](https://github.com/fitchmultz/pi-stash/commit/b9d73fbcb7ba129c56c440916fa18ced4c460240))
+
+### What's Changed
+* Automate reviewed npm patch releases by @fitchmultz in https://github.com/fitchmultz/pi-stash/pull/42
+
+
+**Full Changelog**: https://github.com/fitchmultz/pi-stash/compare/v0.4.1...v0.4.2
+
 ## 0.4.1 - 2026-10-31
 
 - Configure or disable stash and restore shortcuts through `pi-stash.json`.
