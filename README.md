@@ -6,15 +6,13 @@ Pi Stash is a [Pi](https://github.com/earendil-works/pi) extension that saves ed
 
 ## Install
 
-Use Pi 1.0.0 or later and Node.js 24.15.0 or later.
+Use Pi and Node.js. The [development guide](https://github.com/fitchmultz/pi-stash/blob/main/docs/development.md) lists version requirements and GitHub and local installation options.
 
 ```bash
 pi install npm:@fitchmultz/pi-stash
 ```
 
 Restart Pi after you install or update the extension.
-
-See the [development guide](docs/development.md) for GitHub and local installation.
 
 ## Usage
 
