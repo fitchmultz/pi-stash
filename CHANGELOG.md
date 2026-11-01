@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.4.3 - 2026-11-01
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- Pin reviewed release source binding (#44) ([5a4d2e1](https://github.com/fitchmultz/pi-stash/commit/5a4d2e16ffbe40c5bd6d947b1d281c1ebc42fbc8))
+
+### What's Changed
+* Bind automatic releases to the reviewed version by @fitchmultz in https://github.com/fitchmultz/pi-stash/pull/44
+
+
+**Full Changelog**: https://github.com/fitchmultz/pi-stash/compare/v0.4.2...v0.4.3
+
 ## 0.4.2 - 2026-10-31
 
 <!-- npm-release:unreleased:start -->
