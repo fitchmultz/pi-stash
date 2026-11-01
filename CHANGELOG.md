@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.4.4 - 2026-11-01
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- Use direct Flash for automatic release remediation (#46) ([be96936](https://github.com/fitchmultz/pi-stash/commit/be96936062cc29d075762148b56c08228d803910))
+
+**Full Changelog**: https://github.com/fitchmultz/pi-stash/compare/v0.4.3...v0.4.4
+
 ## 0.4.3 - 2026-11-01
 
 <!-- npm-release:unreleased:start -->
