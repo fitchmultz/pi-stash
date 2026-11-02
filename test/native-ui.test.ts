@@ -247,9 +247,6 @@ nodeTest(
         },
       );
 
-      // Pi 1.4 added dialog stacks. Earlier supported hosts can only exercise single-picker reload.
-      const [major = 0, minor = 0] = pi.VERSION.split(".").map(Number);
-      const supportsDialogStack = major > 1 || (major === 1 && minor >= 4);
       // Regression for #37. Reload disposes custom UI before session_shutdown on current hosts.
       for (const tuiMode of ["fullscreen", "regular"] as const) {
         await t.test(`${tuiMode} reload settles a picker without changing drafts`, async () => {
@@ -264,31 +261,25 @@ nodeTest(
           assert.ok(screen().some((line) => line.includes("Stashed Drafts")));
           const queuedStash = runtime.session.prompt("/stash must not survive reload");
           let siblingDisposed = false;
-          const sibling = supportsDialogStack
-            ? currentContext(commandContexts).ui.custom<null>((_tui, _theme, _keys, done) => ({
-                render: () => ["Sibling dialog"],
-                invalidate() {
-                  /* Nothing to invalidate. */
-                },
-                dispose() {
-                  if (siblingDisposed) {
-                    return;
-                  }
-                  siblingDisposed = true;
-                  queueMicrotask(() => {
-                    done(null);
-                  });
-                },
-              }))
-            : undefined;
-          if (supportsDialogStack) {
-            await rendered();
-            assert.ok(screen().some((line) => line.includes("Sibling dialog")));
-          } else {
-            t.diagnostic(
-              `Pi ${pi.VERSION} has no dialog stack. Sibling-disposal coverage requires the current-host lanes.`,
-            );
-          }
+          const sibling = currentContext(commandContexts).ui.custom<null>(
+            (_tui, _theme, _keys, done) => ({
+              render: () => ["Sibling dialog"],
+              invalidate() {
+                /* Nothing to invalidate. */
+              },
+              dispose() {
+                if (siblingDisposed) {
+                  return;
+                }
+                siblingDisposed = true;
+                queueMicrotask(() => {
+                  done(null);
+                });
+              },
+            }),
+          );
+          await rendered();
+          assert.ok(screen().some((line) => line.includes("Sibling dialog")));
           await currentContext(commandContexts).reload();
           await runtime.session.prompt("/qa-context");
           assert.equal(
@@ -298,13 +289,11 @@ nodeTest(
           currentContext(commandContexts).ui.setEditorText("new session draft");
           await rendered();
           assert.equal(settled, true, "reload must settle the outgoing stash-list command");
-          if (supportsDialogStack) {
-            assert.equal(
-              siblingDisposed,
-              true,
-              "picker completion must not skip native sibling disposal",
-            );
-          }
+          assert.equal(
+            siblingDisposed,
+            true,
+            "picker completion must not skip native sibling disposal",
+          );
           await Promise.all([picker, queuedStash, sibling]);
           assert.deepEqual(drafts(), ["newer mouse draft"]);
           assert.equal(currentContext(commandContexts).ui.getEditorText(), "new session draft");
