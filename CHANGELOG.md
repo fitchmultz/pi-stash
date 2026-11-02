@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.4.6 - 2026-11-02
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- Adopt the Strict Oxlint/Oxfmt Engineering Standard v5.1.2 (#49) ([0125116](https://github.com/fitchmultz/pi-stash/commit/012511696b116c28f0df9b07f1447970674b11ea))
+
+### What's Changed
+
+- Adopt the Strict Oxlint/Oxfmt Engineering Standard v5.1.2 by @fitchmultz in https://github.com/fitchmultz/pi-stash/pull/49
+
+**Full Changelog**: https://github.com/fitchmultz/pi-stash/compare/v0.4.5...v0.4.6
+
 ## 0.4.5 - 2026-11-02
 
 <!-- npm-release:unreleased:start -->
