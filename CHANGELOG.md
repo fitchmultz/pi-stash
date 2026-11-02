@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.4.5 - 2026-11-02
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- chore(deps-dev): bump brace-expansion from 5.0.9 to 5.0.12 (#41) ([165b53c](https://github.com/fitchmultz/pi-stash/commit/165b53c7e57bcedc601481049dd31a4a352f4bb2))
+
+### What's Changed
+* chore(deps-dev): bump brace-expansion from 5.0.9 to 5.0.12 by @dependabot[bot] in https://github.com/fitchmultz/pi-stash/pull/41
+
+### New Contributors
+* @dependabot[bot] made their first contribution in https://github.com/fitchmultz/pi-stash/pull/41
+
+**Full Changelog**: https://github.com/fitchmultz/pi-stash/compare/v0.4.4...v0.4.5
+
 ## 0.4.4 - 2026-11-01
 
 <!-- npm-release:unreleased:start -->
