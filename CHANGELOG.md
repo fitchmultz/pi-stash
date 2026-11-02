@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.4.8 - 2026-11-02
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- Recheck unreported Cursor reviews in automatic releases (#53) ([04416b5](https://github.com/fitchmultz/pi-stash/commit/04416b5e585b8bee426a9f8573ca7f46f7cb1d03))
+
+### What's Changed
+
+- Recheck unreported Cursor reviews in automatic releases by @fitchmultz in https://github.com/fitchmultz/pi-stash/pull/53
+
+**Full Changelog**: https://github.com/fitchmultz/pi-stash/compare/v0.4.7...v0.4.8
+
 ## 0.4.7 - 2026-11-02
 
 <!-- npm-release:unreleased:start -->
