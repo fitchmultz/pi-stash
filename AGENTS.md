@@ -1,5 +1,10 @@
 # Project instructions
 
+## Code quality standard
+
+- Follow the [Strict Oxlint/Oxfmt Engineering Standard](docs/standards/Strict-Oxlint-Oxfmt-Engineering-Guide-v5.1.2.md). `npm run check` is the normal acceptance command; it aggregates format, lint, typecheck, coverage, policy, test, and packaging with an aggregate exit status.
+- Any deviation from the standard's baseline requires a recorded quality exception in that guide copy, with the evidence the standard demands.
+
 ## Dependency maintenance
 
 - Frequently and proactively check releases and make appropriate upgrades across maintained packages and all runtime, development, build, test, and tool dependencies, prioritizing the latest stable official Pi and the intended maintained Pi fork. Routine in-scope maintenance needs no repeated approval; delivery remains subject to existing authority and gates.

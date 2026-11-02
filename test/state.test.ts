@@ -7,63 +7,63 @@
  */
 
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test as nodeTest } from "node:test";
 
 import {
-	clampSelectedIndex,
-	countLabel,
-	hydrateState,
-	previewDraft,
-	pushDraft,
-	STASH_ENTRY_TYPE,
-	withoutDraft,
+  clampSelectedIndex,
+  countLabel,
+  hydrateState,
+  previewDraft,
+  pushDraft,
+  STASH_ENTRY_TYPE,
+  withoutDraft,
 } from "../extensions/state.ts";
 
-test("hydrateState returns the latest valid stash snapshot", () => {
-	const state = hydrateState([
-		{ type: "custom", customType: STASH_ENTRY_TYPE, data: { drafts: ["older"] } },
-		{ type: "custom", customType: "other-extension", data: { drafts: ["ignore"] } },
-		{ type: "custom", customType: STASH_ENTRY_TYPE, data: { drafts: ["newest", "older"] } },
-	]);
+nodeTest("hydrateState returns the latest valid stash snapshot", () => {
+  const state = hydrateState([
+    { type: "custom", customType: STASH_ENTRY_TYPE, data: { drafts: ["older"] } },
+    { type: "custom", customType: "other-extension", data: { drafts: ["ignore"] } },
+    { type: "custom", customType: STASH_ENTRY_TYPE, data: { drafts: ["newest", "older"] } },
+  ]);
 
-	assert.deepEqual(state, ["newest", "older"]);
+  assert.deepEqual(state, ["newest", "older"]);
 });
 
-test("hydrateState ignores malformed snapshots", () => {
-	const state = hydrateState([
-		{ type: "custom", customType: STASH_ENTRY_TYPE, data: { drafts: ["ok", 42] } },
-		{ type: "message", customType: STASH_ENTRY_TYPE, data: { drafts: ["wrong type"] } },
-	]);
+nodeTest("hydrateState ignores malformed snapshots", () => {
+  const state = hydrateState([
+    { type: "custom", customType: STASH_ENTRY_TYPE, data: { drafts: ["ok", 42] } },
+    { type: "message", customType: STASH_ENTRY_TYPE, data: { drafts: ["wrong type"] } },
+  ]);
 
-	assert.deepEqual(state, []);
+  assert.deepEqual(state, []);
 });
 
-test("pushDraft keeps newest drafts first and enforces the limit", () => {
-	const drafts = Array.from({ length: 10 }, (_, index) => `draft-${index}`);
-	const next = pushDraft(drafts, "fresh");
+nodeTest("pushDraft keeps newest drafts first and enforces the limit", () => {
+  const drafts = Array.from({ length: 10 }, (_, index) => `draft-${index}`);
+  const next = pushDraft(drafts, "fresh");
 
-	assert.equal(next.length, 10);
-	assert.equal(next[0], "fresh");
-	assert.equal(next.at(-1), "draft-8");
+  assert.equal(next.length, 10);
+  assert.equal(next[0], "fresh");
+  assert.equal(next.at(-1), "draft-8");
 });
 
-test("withoutDraft removes only the newest matching draft", () => {
-	assert.deepEqual(withoutDraft(["same", "other", "same"], "same"), ["other", "same"]);
-	assert.deepEqual(withoutDraft(["other"], "missing"), ["other"]);
+nodeTest("withoutDraft removes only the newest matching draft", () => {
+  assert.deepEqual(withoutDraft(["same", "other", "same"], "same"), ["other", "same"]);
+  assert.deepEqual(withoutDraft(["other"], "missing"), ["other"]);
 });
 
-test("clampSelectedIndex keeps picker selection in bounds", () => {
-	assert.equal(clampSelectedIndex(-1, 3), 0);
-	assert.equal(clampSelectedIndex(99, 3), 2);
-	assert.equal(clampSelectedIndex(5, 0), 0);
+nodeTest("clampSelectedIndex keeps picker selection in bounds", () => {
+  assert.equal(clampSelectedIndex(-1, 3), 0);
+  assert.equal(clampSelectedIndex(99, 3), 2);
+  assert.equal(clampSelectedIndex(5, 0), 0);
 });
 
-test("previewDraft flattens whitespace and truncates long drafts", () => {
-	assert.equal(previewDraft("hello\n\nworld"), "hello world");
-	assert.equal(previewDraft("abcdefghij", 6), "abcde…");
+nodeTest("previewDraft flattens whitespace and truncates long drafts", () => {
+  assert.equal(previewDraft("hello\n\nworld"), "hello world");
+  assert.equal(previewDraft("abcdefghij", 6), "abcde…");
 });
 
-test("countLabel pluralizes draft counts", () => {
-	assert.equal(countLabel(1), "1 draft");
-	assert.equal(countLabel(2), "2 drafts");
+nodeTest("countLabel pluralizes draft counts", () => {
+  assert.equal(countLabel(1), "1 draft");
+  assert.equal(countLabel(2), "2 drafts");
 });

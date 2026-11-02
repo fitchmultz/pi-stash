@@ -27,11 +27,19 @@ Restart Pi after installing or updating the extension. Pi loads its TypeScript d
 
 ## Checks
 
+The repository follows the [Strict Oxlint/Oxfmt Engineering Standard](standards/Strict-Oxlint-Oxfmt-Engineering-Guide-v5.1.2.md). Its Appendix A configuration is the lint baseline, the policy check compares the effective configuration against that baseline, and deviations require recorded quality exceptions in the guide copy.
+
 ```bash
-npm run check         # typecheck + tests + pack dry-run
+npm run check         # aggregate acceptance: format:check + lint + typecheck + coverage + policy + test + pack
+npm run lint          # oxlint under the strict type-aware configuration
+npm run format        # oxfmt write
+npm run coverage      # compiler, lint, and formatter membership for every maintained file
+npm run policy        # effective lint configuration vs the Appendix A baseline
 npm run smoke         # isolated pi install, stash, list, and restart through the real CLI
 npm run check:compat  # check + smoke; used during host qualification
 ```
+
+Every step reports its own PASS/FAIL and the aggregate fails when any gate fails. `test/standards.test.ts` holds the standing qualification controls for the node:test registration allowance, the structural profile boundaries, and directive handling.
 
 `test/native-ui.test.ts` loads the extension through the standalone SDK and native `InteractiveMode`. It checks fullscreen and regular shortcuts, draft merging, picker cancellation and mouse selection, and fork/resume/reload restoration. Reload coverage verifies command settlement and draft preservation with a picker open. On Pi 1.4 and later, it also keeps a second dialog open to check native dialog-stack cleanup. The tests use an isolated profile and memory terminal, with no model or clipboard calls.
 
