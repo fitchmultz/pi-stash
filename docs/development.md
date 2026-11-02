@@ -41,7 +41,7 @@ npm run check:compat  # check + smoke; used during host qualification
 
 Every step reports its own PASS/FAIL and the aggregate fails when any gate fails. `test/standards.test.ts` holds the standing qualification controls for the node:test registration allowance, the structural profile boundaries, and directive handling.
 
-`test/native-ui.test.ts` loads the extension through the standalone SDK and native `InteractiveMode`. It checks fullscreen and regular shortcuts, draft merging, picker cancellation and mouse selection, and fork/resume/reload restoration. Reload coverage verifies command settlement and draft preservation with a picker open. On Pi 1.4 and later, it also keeps a second dialog open to check native dialog-stack cleanup. The tests use an isolated profile and memory terminal, with no model or clipboard calls.
+`test/native-ui.test.ts` loads the extension through the standalone SDK and native `InteractiveMode`. It checks fullscreen and regular shortcuts, draft merging, picker cancellation and mouse selection, and fork/resume/reload restoration. Reload coverage verifies command settlement and draft preservation with a picker open, and keeps a second dialog open to check native dialog-stack cleanup. The tests use an isolated profile and memory terminal, with no model or clipboard calls.
 
 Default-limit assertions use the documented ten-draft contract, not the production constant they are checking.
 
@@ -49,7 +49,7 @@ The smoke test uses an isolated HOME and agent directory. It checks shared draft
 
 ## Latest-host qualification
 
-Pi **1.0.0** is the support floor. Qualification requires the latest stable official Pi and the latest maintained fork `main`, resolving the version and commit once per workflow run and retaining exact SDK/CLI evidence. Locked development dependencies are reproducible snapshots, not the latest-host validation targets. Plain `npm ci` checks only that locked development snapshot.
+Pi **1.5.0** is the support floor. Qualification requires the latest stable official Pi and the latest maintained fork `main`, resolving the version and commit once per workflow run and retaining exact SDK/CLI evidence. Locked development dependencies are reproducible snapshots, not the latest-host validation targets. Plain `npm ci` checks only that locked development snapshot.
 
 The GitHub compatibility workflow runs the checks against both hosts and retains qualification evidence. To qualify locally with a checkout of the [shared automation repository](https://github.com/fitchmultz/.github):
 
