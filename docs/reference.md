@@ -17,7 +17,7 @@ Create `pi-stash.json` in your Pi agent directory. The default path is `~/.pi/ag
 
 Values use Pi keybinding strings, such as `ctrl+s`, `ctrl+shift+s`, or `alt+r`. Use different keys for stash and restore. Do not add surrounding whitespace.
 
-Set a shortcut to `false` to disable it. `/stash` and `/stash-list` remain available. Omitted values keep the defaults: `ctrl+shift+s` for stash and `ctrl+shift+r` for restore. A missing file also keeps these defaults.
+Set a shortcut to `false` to disable it. `/stash` and `/stash-list` remain available. Omitted values keep the defaults: `ctrl+shift+s` for stash and `ctrl+shift+r` for restore. A missing file, or a `shortcuts` value of `null`, also keeps these defaults.
 
 Restart Pi after you change the file.
 

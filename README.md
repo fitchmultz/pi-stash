@@ -32,11 +32,11 @@ The footer shows the saved draft count.
 
 ## Commands and shortcuts
 
-| Shortcut or command | Action |
-| --- | --- |
-| `/stash` | Saves the editor draft and clears the editor |
-| `/stash some text` | Saves the supplied text and leaves the editor unchanged |
-| `/stash-list` | Opens the picker to restore or delete drafts |
+| Shortcut or command | Action                                                  |
+| ------------------- | ------------------------------------------------------- |
+| `/stash`            | Saves the editor draft and clears the editor            |
+| `/stash some text`  | Saves the supplied text and leaves the editor unchanged |
+| `/stash-list`       | Opens the picker to restore or delete drafts            |
 
 The picker uses Pi's navigation and confirmation keys. Press Ctrl+D to delete the selected draft. Press Ctrl+X to clear all drafts after confirmation.
 

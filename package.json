@@ -41,9 +41,16 @@
   "scripts": {
     "test": "node --test test/*.test.ts",
     "typecheck": "tsc",
+    "lint": "oxlint --deny-warnings .",
+    "lint:agent": "oxlint --deny-warnings --format=agent .",
+    "lint:fix": "oxlint --fix .",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "coverage": "node scripts/check-coverage.mjs",
+    "policy": "node scripts/check-policy.mjs",
+    "check": "node scripts/check.mjs",
     "smoke": "node scripts/smoke-package-load.mjs",
-    "check": "npm run typecheck && npm test && npm pack --dry-run",
-    "check:compat": "npm run check && npm run smoke",
+    "check:compat": "node scripts/check.mjs --smoke",
     "prepublishOnly": "npm run check:compat"
   },
   "peerDependencies": {
@@ -62,6 +69,9 @@
     "@earendil-works/pi-coding-agent": "1.0.0",
     "@earendil-works/pi-tui": "1.0.0",
     "@types/node": "24.19.1",
+    "oxfmt": "0.75.0",
+    "oxlint": "1.90.0",
+    "oxlint-tsgolint": "7.0.2005",
     "typescript": "7.0.2"
   },
   "packageManager": "npm@12.2.0"
