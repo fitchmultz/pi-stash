@@ -49,6 +49,15 @@ nodeTest("resolveShortcuts supports false to disable a shortcut", () => {
   assert.deepEqual(resolveShortcuts(dir), { stash: false, restore: DEFAULT_SHORTCUTS.restore });
 });
 
+nodeTest("resolveShortcuts treats null shortcuts as omitted", () => {
+  const dir = freshDir();
+  writeFileSync(join(dir, "pi-stash.json"), JSON.stringify({ shortcuts: null }));
+  assert.deepEqual(resolveShortcuts(dir), {
+    stash: DEFAULT_SHORTCUTS.stash,
+    restore: DEFAULT_SHORTCUTS.restore,
+  });
+});
+
 nodeTest("resolveShortcuts rejects invalid config", () => {
   const badJson = freshDir();
   writeFileSync(join(badJson, "pi-stash.json"), "{not json");
@@ -57,4 +66,8 @@ nodeTest("resolveShortcuts rejects invalid config", () => {
   const badShape = freshDir();
   writeFileSync(join(badShape, "pi-stash.json"), JSON.stringify({ shortcuts: { stash: 42 } }));
   assert.throws(() => resolveShortcuts(badShape), /Invalid shortcuts\.stash/);
+
+  const badType = freshDir();
+  writeFileSync(join(badType, "pi-stash.json"), JSON.stringify({ shortcuts: "nope" }));
+  assert.throws(() => resolveShortcuts(badType), /Invalid shortcuts in/);
 });

@@ -98,7 +98,7 @@ export function resolveShortcuts(agentDir: string = getAgentDir()): {
     throw new Error(`Invalid config in ${file}: expected a JSON object`);
   }
   const shortcuts = "shortcuts" in parsed ? parsed.shortcuts : undefined;
-  if (shortcuts === undefined) {
+  if (shortcuts === undefined || shortcuts === null) {
     return { ...DEFAULT_SHORTCUTS };
   }
   if (!isRecord(shortcuts)) {
