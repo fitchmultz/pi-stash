@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.4.7 - 2026-11-02
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- Raise the Pi floor to 1.5.0 (#51) ([5429b00](https://github.com/fitchmultz/pi-stash/commit/5429b000ed7f921a36c17353ecddd34331679601))
+
+### What's Changed
+
+- Raise the Pi floor to 1.5.0 by @fitchmultz in https://github.com/fitchmultz/pi-stash/pull/51
+
+**Full Changelog**: https://github.com/fitchmultz/pi-stash/compare/v0.4.6...v0.4.7
+
 ## 0.4.6 - 2026-11-02
 
 <!-- npm-release:unreleased:start -->
