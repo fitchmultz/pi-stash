@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.4.9 - 2026-11-03
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- Skip no-op releases and restate malformed remediation dispositions (#56) ([7f4c3e8](https://github.com/fitchmultz/pi-stash/commit/7f4c3e80e662ca3b65fde297896163cd5b06b182))
+
+### What's Changed
+
+- Skip no-op releases and restate malformed remediation dispositions by @fitchmultz in https://github.com/fitchmultz/pi-stash/pull/56
+
+**Full Changelog**: https://github.com/fitchmultz/pi-stash/compare/v0.4.8...v0.4.9
+
 ## 0.4.8 - 2026-11-02
 
 <!-- npm-release:unreleased:start -->
