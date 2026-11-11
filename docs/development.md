@@ -69,7 +69,7 @@ For the fork target, use a packed build of the latest maintained fork. See the [
 
 ## Automatic npm releases
 
-Once configured and enabled, merges to `main` trigger automatic versioning and releases to npm and GitHub after the compatibility checks and candidate-tarball qualification pass. Follow the [shared release procedure](https://github.com/fitchmultz/.github#automatic-npm-releases) for setup, retries, and recovery.
+Once configured and enabled, merges to `main` trigger automatic versioning and releases to npm and GitHub after the compatibility checks and candidate-tarball qualification pass. A merge gets a new version when it changes the package users install; a merge that changes only CI, tests or development tooling ships with the next release. Follow the [shared release procedure](https://github.com/fitchmultz/.github#automatic-npm-releases) for setup, retries, and recovery.
 
 Set the repository variable `NPM_RELEASE_ENABLED` to anything other than `true` to stop new release plans; cancel pending runs separately when needed. Workflow validation is not evidence of a completed real OIDC publication.
 
