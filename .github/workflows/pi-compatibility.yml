@@ -83,6 +83,7 @@ jobs:
       - name: Qualify official Pi and the fork
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           OFFICIAL_VERSION: ${{ needs.resolve.outputs.official-version }}
         run: |
           npm install --global "$(node -p 'require("./extension/package.json").packageManager')"
