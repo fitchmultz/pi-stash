@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.4.10 - 2026-11-12
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- Wake the version workflow only for release events (#58) ([e265270](https://github.com/fitchmultz/pi-stash/commit/e2652703bcdfde94721e4d2ada83f2468770b3bc))
+
+### What's Changed
+
+- Wake the version workflow only for release events by @fitchmultz in https://github.com/fitchmultz/pi-stash/pull/58
+- ci: align shared automation pins and wire release supersession inputs by @fitchmultz in https://github.com/fitchmultz/pi-stash/pull/59
+- chore: require patched Node.js security releases by @fitchmultz in https://github.com/fitchmultz/pi-stash/pull/60
+
+**Full Changelog**: https://github.com/fitchmultz/pi-stash/compare/v0.4.9...v0.4.10
+
 ## 0.4.9 - 2026-11-03
 
 <!-- npm-release:unreleased:start -->
