@@ -981,7 +981,7 @@ The following primary references describe tool behavior. This standard defines t
 ### Adoption record
 
 - Repository: [fitchmultz/pi-stash](https://github.com/fitchmultz/pi-stash). Adopted standard: this file, version 5.1.2.
-- Runtimes and package manager: Node.js 24 or later (TypeScript type stripping runs sources, tests, and fixtures without a build step), npm with a committed lockfile. Local verification ran on Node.js 24.22.2.
+- Runtimes and package manager: Node.js 24.22.3 (24.x) or 26.13.1 and later (TypeScript type stripping runs sources, tests, and fixtures without a build step), npm with a committed lockfile. Local verification ran on Node.js 24.22.2.
 - Installed tool versions at adoption: oxlint 1.90.0, oxfmt 0.75.0, oxlint-tsgolint 7.0.2005, typescript 7.0.2, @types/node 24.19.1; host packages @earendil-works/pi-coding-agent 1.0.0 and @earendil-works/pi-tui 1.0.0.
 - Config paths: [.oxlintrc.json](../../.oxlintrc.json) (Appendix A baseline plus the recorded deltas below), [.oxfmtrc.json](../../.oxfmtrc.json) (Section 7.1 defaults), [tsconfig.json](../../tsconfig.json) (Section 4.2 settings).
 - Compiler projects: one tsconfig covering `extensions/`, `test/`, and `scripts/`, with `allowJs`/`checkJs` for the checked-JS tooling scripts. The repository has no handwritten declarations; `skipLibCheck` is retained under the Section 4.2 application posture because the only declaration failures are inside dependency packages (pi-ai JSON import attributes, @google/genai unresolved types). Every repository source is fully checked.
