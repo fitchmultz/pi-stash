@@ -14,7 +14,7 @@ Restart Pi after you install or update the extension.
 
 ## Local setup
 
-Use Node.js **24.15.0 or later** and npm. The repository declares its npm version in `package.json`.
+Use Node.js **24.22.3 (24.x) or 26.13.1 and later** and npm. The repository declares its npm version in `package.json`.
 
 ```bash
 git clone https://github.com/fitchmultz/pi-stash
