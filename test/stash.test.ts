@@ -7,7 +7,8 @@
  */
 
 import assert from "node:assert/strict";
-import { createHash, randomUUID } from "node:crypto";
+import { hash, randomUUID } from "node:crypto";
+import { setImmediate as yieldImmediate } from "node:timers/promises";
 import {
   existsSync,
   mkdirSync,
@@ -206,11 +207,7 @@ function createContext(options: {
 }
 
 function stashPath(cwd: string, root = agentDir): string {
-  return join(
-    root,
-    "pi-stash",
-    `${createHash("sha256").update(cwd).digest("hex").slice(0, 16)}.json`,
-  );
+  return join(root, "pi-stash", `${hash("sha256", cwd, "hex").slice(0, 16)}.json`);
 }
 
 function storedDrafts(cwd: string): string[] | undefined {
@@ -568,9 +565,7 @@ nodeTest("state mutations remain serialized while a picker is pending", async ()
   const picker = requiredCommand(harness, "stash-list").handler("", context.ctx);
   await opened.promise;
   const queuedStash = requiredCommand(harness, "stash").handler("queued", context.ctx);
-  await new Promise((resolve) => {
-    setImmediate(resolve);
-  });
+  await yieldImmediate();
   assert.deepEqual(storedDrafts(cwd), ["latest", "older"]);
 
   pickerResult.resolve({ action: "cancel" });

@@ -6,7 +6,7 @@
  * Invariants/Assumptions: Drafts are restored newest-first by default, blank drafts are never stashed, the project file is re-read before every mutation, and non-TUI clients use confirmation or summary flows.
  */
 
-import { createHash, randomUUID } from "node:crypto";
+import { hash, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
@@ -113,7 +113,7 @@ export function resolveShortcuts(agentDir: string = getAgentDir()): {
 }
 
 function stashFile(cwd: string): string {
-  const key = createHash("sha256").update(cwd).digest("hex").slice(0, 16);
+  const key = hash("sha256", cwd, "hex").slice(0, 16);
   return join(getAgentDir(), "pi-stash", `${key}.json`);
 }
 

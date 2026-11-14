@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { hash } from "node:crypto";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -166,7 +166,7 @@ nodeTest(
       const stashFile = join(
         agentDir,
         "pi-stash",
-        `${createHash("sha256").update(home).digest("hex").slice(0, 16)}.json`,
+        `${hash("sha256", home, "hex").slice(0, 16)}.json`,
       );
       const drafts = (): string[] => {
         const result = readDrafts(JSON.parse(readFileSync(stashFile, "utf8")));
