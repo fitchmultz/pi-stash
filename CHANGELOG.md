@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.4.11 - 2026-11-14
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- chore: pin nvm to patched Node 24.22.3 (#62) ([3f017f7](https://github.com/fitchmultz/pi-stash/commit/3f017f710f1d04a0b6847c076a4d333b2da7cbbe))
+
+### What's Changed
+
+- chore: pin nvm to patched Node 24.22.3 by @fitchmultz in https://github.com/fitchmultz/pi-stash/pull/62
+- Raise the Pi floor to 1.5.2 and use Node 24/ES2025 built-ins by @fitchmultz in https://github.com/fitchmultz/pi-stash/pull/63
+
+**Full Changelog**: https://github.com/fitchmultz/pi-stash/compare/v0.4.10...v0.4.11
+
 ## 0.4.10 - 2026-11-12
 
 <!-- npm-release:unreleased:start -->
