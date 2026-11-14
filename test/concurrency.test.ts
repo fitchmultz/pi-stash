@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { fork, type ChildProcess } from "node:child_process";
-import { createHash } from "node:crypto";
+import { hash } from "node:crypto";
 import { once } from "node:events";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -138,7 +138,7 @@ nodeTest(
           ),
         ),
       );
-      const key = createHash("sha256").update(cwd).digest("hex").slice(0, 16);
+      const key = hash("sha256", cwd, "hex").slice(0, 16);
       const stored: unknown = JSON.parse(
         readFileSync(join(root, "pi-stash", `${key}.json`), "utf8"),
       );

@@ -49,7 +49,7 @@ The smoke test uses an isolated HOME and agent directory. It checks shared draft
 
 ## Latest-host qualification
 
-Pi **1.5.0** is the support floor. Qualification requires the latest stable official Pi and the latest maintained fork `main`, resolving the version and commit once per workflow run and retaining exact SDK/CLI evidence. Locked development dependencies are reproducible snapshots, not the latest-host validation targets. Plain `npm ci` checks only that locked development snapshot.
+Pi **1.5.2** is the support floor. Qualification requires the latest stable official Pi and the latest maintained fork `main`, resolving the version and commit once per workflow run and retaining exact SDK/CLI evidence. Locked development dependencies are reproducible snapshots, not the latest-host validation targets. Plain `npm ci` checks only that locked development snapshot.
 
 The GitHub compatibility workflow runs the checks against both hosts and retains qualification evidence. To qualify locally with a checkout of the [shared automation repository](https://github.com/fitchmultz/.github):
 
