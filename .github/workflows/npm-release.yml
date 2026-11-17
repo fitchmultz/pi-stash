@@ -19,9 +19,9 @@ jobs:
     permissions:
       contents: write
     if: vars.NPM_RELEASE_ENABLED == 'true' && github.ref == 'refs/heads/main' && github.repository_owner == 'fitchmultz'
-    uses: fitchmultz/.github/.github/workflows/npm-release-plan.yml@f407404914bf6d048e4d952c62711df5103cc7ef # main
+    uses: fitchmultz/.github/.github/workflows/npm-release-plan.yml@e007829ba45938fbb3bdab83e5152771369bb656 # main
     with:
-      automation-ref: f407404914bf6d048e4d952c62711df5103cc7ef # main
+      automation-ref: e007829ba45938fbb3bdab83e5152771369bb656 # main
 
   checks:
     needs: plan
@@ -37,9 +37,9 @@ jobs:
     permissions:
       contents: write
       id-token: write
-    uses: fitchmultz/.github/.github/workflows/npm-release.yml@f407404914bf6d048e4d952c62711df5103cc7ef # main
+    uses: fitchmultz/.github/.github/workflows/npm-release.yml@e007829ba45938fbb3bdab83e5152771369bb656 # main
     with:
-      automation-ref: f407404914bf6d048e4d952c62711df5103cc7ef # main
+      automation-ref: e007829ba45938fbb3bdab83e5152771369bb656 # main
       source-ref: ${{ needs.plan.outputs.source }}
       release-source: ${{ needs.plan.outputs.release-source }}
       official-version: ${{ needs.plan.outputs.official-version }}
