@@ -61,6 +61,12 @@ nodeTest("clampSelectedIndex keeps picker selection in bounds", () => {
 nodeTest("previewDraft flattens whitespace and truncates long drafts", () => {
   assert.equal(previewDraft("hello\n\nworld"), "hello world");
   assert.equal(previewDraft("abcdefghij", 6), "abcde…");
+  assert.equal(
+    previewDraft("\x1b[31mred\x1b[0m \x1b]8;;https://example.com\x07link\x1b]8;;\x07"),
+    "red link",
+  );
+  assert.equal(previewDraft("a\x07b\x1b[1Ac\x9bd"), "a b [1Ac d");
+  assert.equal(previewDraft("😀😁😂😃😄", 6), "😀😁…");
 });
 
 nodeTest("countLabel pluralizes draft counts", () => {

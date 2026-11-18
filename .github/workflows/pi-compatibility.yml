@@ -22,81 +22,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  resolve:
-    uses: fitchmultz/.github/.github/workflows/resolve-hosts.yml@e007829ba45938fbb3bdab83e5152771369bb656 # main
+  compatibility:
+    uses: fitchmultz/.github/.github/workflows/pi-compatibility.yml@3e744f52412c3669bd781ed5ea3e21567798352e # main
     with:
-      automation-ref: e007829ba45938fbb3bdab83e5152771369bb656 # main
+      automation-ref: 3e744f52412c3669bd781ed5ea3e21567798352e # main
       official-version: ${{ inputs.official-version }}
       fork-ref: ${{ inputs.fork-ref }}
-
-  compatibility:
-    needs: resolve
-    if: ${{ !cancelled() }}
-    name: compatibility / compatibility
-    runs-on: ubuntu-latest
-    timeout-minutes: 7
-    env:
-      PI_OFFLINE: "1"
-      PI_TELEMETRY: "0"
-      PI_AUTOMATION_REF: e007829ba45938fbb3bdab83e5152771369bb656 # main
-      npm_config_cache: ${{ github.workspace }}/.npm-cache
-      npm_config_audit: "false"
-      npm_config_fund: "false"
-    steps:
-      - name: Require resolved latest hosts
-        env:
-          RESOLVE: ${{ needs.resolve.result }}
-        run: test "$RESOLVE" = success
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          path: extension
-          persist-credentials: false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: fitchmultz/.github
-          ref: ${{ env.PI_AUTOMATION_REF }}
-          path: automation
-          persist-credentials: false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        id: fork
-        with:
-          repository: fitchmultz/pi
-          ref: ${{ needs.resolve.outputs.fork-ref }}
-          path: fork
-          persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "24"
-          check-latest: true
-          package-manager-cache: false
-      - name: Build the maintained fork
-        shell: bash
-        run: |
-          npm install --global "$(node -p 'require("./automation/package.json").packageManager')"
-          npm --prefix fork ci --ignore-scripts
-          npm --prefix fork run hydrate:model-data
-          git -C fork diff --exit-code
-          npm --prefix fork run build:offline
-          git -C fork diff --exit-code
-          fork_ref=$(git -C fork rev-parse HEAD)
-          node automation/scripts/pack-fork.mjs fork "$RUNNER_TEMP/fork-package" "$fork_ref"
-          echo "PI_COMPAT_FORK_REF=$fork_ref" >> "$GITHUB_ENV"
-      - name: Qualify official Pi and the fork
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          OFFICIAL_VERSION: ${{ needs.resolve.outputs.official-version }}
-        run: |
-          npm install --global "$(node -p 'require("./extension/package.json").packageManager')"
-          node automation/scripts/qualify.mjs --repo pi-stash --source "$GITHUB_WORKSPACE/extension" --host official --target "$OFFICIAL_VERSION" --output "$RUNNER_TEMP/official-evidence"
-          node automation/scripts/qualify.mjs --repo pi-stash --source "$GITHUB_WORKSPACE/extension" --host fork --target "$RUNNER_TEMP/fork-package" --output "$RUNNER_TEMP/fork-evidence"
-      - name: Retain qualification evidence
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: host-qualification
-          path: |
-            ${{ runner.temp }}/official-evidence
-            ${{ runner.temp }}/fork-evidence
-          if-no-files-found: error
-          retention-days: 3
