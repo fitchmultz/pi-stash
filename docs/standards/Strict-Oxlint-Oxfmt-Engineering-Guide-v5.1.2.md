@@ -982,7 +982,8 @@ The following primary references describe tool behavior. This standard defines t
 
 - Repository: [fitchmultz/pi-stash](https://github.com/fitchmultz/pi-stash). Adopted standard: this file, version 5.1.2.
 - Runtimes and package manager: Node.js 24.22.3 (24.x) or 26.13.1 and later (TypeScript type stripping runs sources, tests, and fixtures without a build step), npm with a committed lockfile. Local verification ran on Node.js 24.22.2.
-- Installed tool versions at this revision: oxlint 1.94.0, oxfmt 0.79.0, tsrs 7.1.0-beta.tsrs2 (`tsrs` replaces stable `oxlint-tsgolint` under QX-007 below), typescript 7.0.2, @types/node 24.19.1; host packages @earendil-works/pi-coding-agent 1.0.0 and @earendil-works/pi-tui 1.0.0.
+- Installed tool versions at adoption: oxlint 1.90.0, oxfmt 0.75.0, oxlint-tsgolint 7.0.2005, typescript 7.0.2, @types/node 24.19.1; host packages @earendil-works/pi-coding-agent 1.0.0 and @earendil-works/pi-tui 1.0.0.
+- Installed tool versions at current revision: oxlint 1.94.0, oxfmt 0.79.0, tsrs 7.1.0-beta.tsrs2 (`tsrs` replaces stable `oxlint-tsgolint` under QX-007 below), typescript 7.0.2, @types/node 24.19.1; host packages @earendil-works/pi-coding-agent 1.5.2 and @earendil-works/pi-tui 1.5.2.
 - Config paths: [.oxlintrc.json](../../.oxlintrc.json) (Appendix A baseline plus the recorded deltas below), [.oxfmtrc.json](../../.oxfmtrc.json) (Section 7.1 defaults), [tsconfig.json](../../tsconfig.json) (Section 4.2 settings).
 - Compiler projects: one tsconfig covering `extensions/`, `test/`, and `scripts/`, with `allowJs`/`checkJs` for the checked-JS tooling scripts. The repository has no handwritten declarations; `skipLibCheck` is retained under the Section 4.2 application posture because the only declaration failures are inside dependency packages (pi-ai JSON import attributes, @google/genai unresolved types). Every repository source is fully checked.
 - Source profiles: production `extensions/*.ts`; tests `test/*.test.ts`; exclusively test-used support `test/fixtures/stash-process.ts`, mapped to the test profile through the recorded override glob; production tooling `scripts/*.mjs`.
@@ -990,7 +991,7 @@ The following primary references describe tool behavior. This standard defines t
 - Acceptance: `npm run check` aggregates `format:check`, `lint`, `typecheck`, `coverage`, `policy`, `test`, and `pack` with per-step results and an aggregate exit status. `npm run check:compat` adds the native smoke run and is the hosted compatibility workflow's command. The policy step compares the effective lint configuration against the Appendix A baseline in this file on both a production and a test target; the coverage step verifies compiler, lint, and formatter membership for every maintained file and selects a probe violation in a new file.
 - Qualification evidence: `test/standards.test.ts` holds the standing controls — all six Section 6.4 node:test boundaries, the six production structural metrics with test-profile counterparts, explicit-rule, category, and type-aware composition, and directive boundaries. Disposable acceptance-wiring mutations (one gate broken at a time, each restored before final verification) produced a failing aggregate with the intended step failing in every run: lint (debugger statement), typecheck (ill-typed assignment; the dependent coverage step reported BLOCKED on its compiler prerequisite), formatter (misformatted maintained source), test (failing assertion), policy (`no-debugger` downgraded to warn), and coverage (`ignorePatterns` exclusion).
 - Migration status: complete. Finding budgets, baseline filtering, and incomplete-source exemptions were never introduced. Intentional behavior change during repair: stash parse failures now attach their `cause` to the reported error. No other observable behavior changed.
-- Exact integrated verification: `npm run check:compat` (format:check, lint, typecheck, coverage, policy, test — 45 tests including all six §6.4 controls in `test/standards.test.ts` — pack, smoke) passed on 2026-11-18 with oxlint 1.94.0 + tsrs 7.1.0-beta.tsrs2 + oxfmt 0.79.0. Hosted compatibility CI runs the same aggregate via `npm run check:compat` on the pushed revision.
+- Exact integrated verification: `npm run check:compat` (format:check, lint, typecheck, coverage, policy, test — 47 tests including all six §6.4 controls in `test/standards.test.ts` — pack, smoke) passed on 2026-11-18 with oxlint 1.94.0 + tsrs 7.1.0-beta.tsrs2 + oxfmt 0.79.0. Hosted compatibility CI runs the same aggregate via `npm run check:compat` on the pushed revision.
 
 ### Quality-exception record
 
@@ -1007,7 +1008,7 @@ Review and revisit trigger: changes to the repository's node:test import forms o
 
 #### QX-002: KeyId cast in shortcut resolution
 
-Rule, option, installed versions: `typescript/no-unsafe-type-assertion`, directive at `extensions/stash.ts:64`; pi-tui 1.0.0.
+Rule, option, installed versions: `typescript/no-unsafe-type-assertion`, directive at `extensions/stash.ts:64`; pi-tui 1.5.2 (adopted at 1.0.0).
 Scope: the single `return value as KeyId` in `resolveShortcut`, reached only after `isRecord` and string validation of the parsed config entry.
 Diagnostic and contract: pi-tui exports `KeyId` as a type-only union in `dist/keys.d.ts` with no runtime validator, so no sound narrowing exists for a validated keybinding string.
 Actual compliant alternative and cost: duplicating the `KeyId` union in this repository would restate a host contract and drift from it.
@@ -1017,7 +1018,7 @@ Review and revisit trigger: pi-tui shipping a runtime `KeyId` validator.
 
 #### QX-003: partial host mocks in the test harness
 
-Rule, option, installed versions: `typescript/no-unsafe-type-assertion`, directives at `test/stash.test.ts:122` and `test/fixtures/stash-process.ts:54`; pi-coding-agent 1.0.0.
+Rule, option, installed versions: `typescript/no-unsafe-type-assertion`, directives at `test/stash.test.ts:122` and `test/fixtures/stash-process.ts:54`; pi-coding-agent 1.5.2 (adopted at 1.0.0).
 Scope: two test-only casts that build partial mocks of host UI and extension API objects; the captured handlers are invoked against the fixture's own context type.
 Diagnostic and contract: the host interfaces cannot be implemented partially without a cast, and the mocks exist to drive the extension's registration path.
 Actual compliant alternative and cost: fully implementing the host interfaces in tests would duplicate the SDK surface for no additional coverage.
@@ -1027,7 +1028,7 @@ Review and revisit trigger: the SDK exposing an official test harness or partial
 
 #### QX-004: host internals in the native UI test
 
-Rule, option, installed versions: `typescript/no-unsafe-type-assertion`, directive at `test/native-ui.test.ts:19`; pi-coding-agent 1.0.0.
+Rule, option, installed versions: `typescript/no-unsafe-type-assertion`, directive at `test/native-ui.test.ts:19`; pi-coding-agent 1.5.2 (adopted at 1.0.0).
 Scope: one cast of `InteractiveMode` to `{ renderer, switchTuiMode }`, used only by `test/native-ui.test.ts` to observe rendered output and switch fullscreen/regular TUI modes.
 Diagnostic and contract: pi exposes no public viewport observer or TUI-mode switch API; the test cannot assert both modes and pointer handling without them.
 Actual compliant alternative and cost: dropping the assertions removes the only coverage of the regular-mode layout, pointer restore, reload settlement, and dialog-stack cleanup.
@@ -1060,7 +1061,7 @@ Review and revisit trigger: a supported pattern for async child-process message 
 Rule, option, installed versions: Section 5.1 ("latest stable published releases of Oxlint, `oxlint-tsgolint`, Oxfmt"); oxlint 1.94.0 (2026-11-16T12:26Z), tsrs 7.1.0-beta.tsrs2 (2026-11-16T11:59Z), oxfmt 0.79.0 (2026-11-16T12:27Z).
 Scope: `package.json` / `package-lock.json` devDependencies and type-aware lint execution (`oxlint` auto-discovers `node_modules/.bin/tsrs-lint`; no directive or rule relaxation).
 Diagnostic and contract: Section 5.1 asks for stable published releases, whereas `tsrs` publishes prereleases only (`dist-tags.latest` is `0.25.0-ts7.1.0-beta`; `7.1.0-beta.tsrs2` is an untagged prerelease; stable `oxlint-tsgolint@7.0.2007` remains published on npm).
-Actual compliant alternative and cost: keeping stable `oxlint-tsgolint@7.0.2007` preserves Section 5.1 directly at ~2.9x–5.3x slower type-aware lint runtime and ~3x–6x higher peak memory across ecosystem repos.
-Chosen adjustment and why: owner-approved substitution of `tsrs@7.1.0-beta.tsrs2`; `oxlint 1.94.0` discovers `tsrs-lint` natively and fails closed if missing, while `npm run check` / `test/standards.test.ts` exercises all six §6.4 controls and `scripts/check-policy.mjs` against it.
-Retained protection and lost detection: all Appendix A type-aware rules, `QX-001`..`QX-006` protections, and `tsc --noEmit` remain active; assumes `tsrs@7.1.0-beta.tsrs2` keeps diagnostic parity with `oxlint-tsgolint`.
+Actual compliant alternative and cost: keeping stable `oxlint-tsgolint@7.0.2007` preserves Section 5.1 directly. In a matched A/B benchmark on `mitchs-m5-mbp` (Darwin arm64, `oxlint 1.94.0` running `oxlint --deny-warnings .`, median of 3 warm runs each via `OXLINT_TSGOLINT_PATH`), `oxlint-tsgolint@7.0.2007` took `0.15s` wall time and `280.4 MiB` maximum RSS vs `0.10s` wall time and `158.5 MiB` maximum RSS with `tsrs@7.1.0-beta.tsrs2` (`1.50x` slower, `1.77x` / `121.9 MiB` higher peak RSS; both exited `0`), alongside ecosystem-wide `1.7x`–`3.4x` peak RSS savings across the 13-repo fleet.
+Chosen adjustment and why: owner-approved substitution of `tsrs@7.1.0-beta.tsrs2`; `oxlint 1.94.0` discovers `tsrs-lint` natively and fails closed (exit 1) if missing, while `npm run check` / `test/standards.test.ts` exercises all six §6.4 controls and `scripts/check-policy.mjs` against it. A matched 7-diagnostic parity probe (`no-floating-promises`, `no-misused-promises`, `no-unsafe-assignment`, `no-unsafe-return`, `no-unsafe-member-access`, `no-unsafe-type-assertion`, `prefer-promise-reject-errors`) also produced identical diagnostics and line locations under both backends (exit 1).
+Retained protection and lost detection: all Appendix A type-aware rules, `QX-001`..`QX-006` protections, and `tsc --noEmit` remain active; diagnostic parity across the exercised type-aware rules is directly verified by `test/standards.test.ts` and the parity probe above.
 Review and revisit trigger: first stable `tsrs` release, any `oxlint` upgrade changing backend discovery, or any type-aware diagnostic regression.
