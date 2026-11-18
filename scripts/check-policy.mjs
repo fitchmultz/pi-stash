@@ -245,7 +245,7 @@ function compareRules(baselinePrinted, actualPrinted, failures) {
  */
 function compareOverrides(baselineOverrides, actualOverrides, failures) {
   const expected = structuredClone(baselineOverrides);
-  const first = expected.length > 0 ? expected[0] : undefined;
+  const first = expected[0];
   if (!isRecord(first) || !Array.isArray(first.files)) {
     assert.fail("the baseline test override must declare a files array");
   }

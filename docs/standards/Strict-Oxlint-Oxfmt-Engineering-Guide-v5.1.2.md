@@ -233,7 +233,7 @@ Native runtime type stripping is not typechecking and does not implement arbitra
 
 ### 5.1 Published tools and compatibility
 
-Use the latest stable published releases of Oxlint, `oxlint-tsgolint`, Oxfmt, and any additional quality-tooling packages introduced by this standard. Resolve current releases when adopting or upgrading the toolchain. This standard prescribes no package version numbers or upgrade waiting period. Keep the canonical compiler/framework checker as a separate required gate.
+Use the latest stable published releases of Oxlint, `tsrs` (`tsrs-lint` for type-aware rules, replacing `oxlint-tsgolint`), Oxfmt, and any additional quality-tooling packages introduced by this standard. Resolve current releases when adopting or upgrading the toolchain. This standard prescribes no package version numbers or upgrade waiting period. Keep the canonical compiler/framework checker as a separate required gate.
 
 Keep dependencies current through the repository's update workflow. Commit the updated dependency declarations and lockfile with each upgrade so local development, agents, CI, and supported editor integrations use the same resolved dependency tree. The lockfile records the current installation for reproducibility; it does not restrict how frequently dependencies may be updated. Automated and frequent upgrades are permitted.
 
@@ -982,7 +982,7 @@ The following primary references describe tool behavior. This standard defines t
 
 - Repository: [fitchmultz/pi-stash](https://github.com/fitchmultz/pi-stash). Adopted standard: this file, version 5.1.2.
 - Runtimes and package manager: Node.js 24.22.3 (24.x) or 26.13.1 and later (TypeScript type stripping runs sources, tests, and fixtures without a build step), npm with a committed lockfile. Local verification ran on Node.js 24.22.2.
-- Installed tool versions at adoption: oxlint 1.90.0, oxfmt 0.75.0, oxlint-tsgolint 7.0.2005, typescript 7.0.2, @types/node 24.19.1; host packages @earendil-works/pi-coding-agent 1.0.0 and @earendil-works/pi-tui 1.0.0.
+- Installed tool versions at adoption: oxlint 1.94.0, oxfmt 0.79.0, tsrs 7.1.0-beta.tsrs2, typescript 7.0.2, @types/node 24.19.1; host packages @earendil-works/pi-coding-agent 1.0.0 and @earendil-works/pi-tui 1.0.0.
 - Config paths: [.oxlintrc.json](../../.oxlintrc.json) (Appendix A baseline plus the recorded deltas below), [.oxfmtrc.json](../../.oxfmtrc.json) (Section 7.1 defaults), [tsconfig.json](../../tsconfig.json) (Section 4.2 settings).
 - Compiler projects: one tsconfig covering `extensions/`, `test/`, and `scripts/`, with `allowJs`/`checkJs` for the checked-JS tooling scripts. The repository has no handwritten declarations; `skipLibCheck` is retained under the Section 4.2 application posture because the only declaration failures are inside dependency packages (pi-ai JSON import attributes, @google/genai unresolved types). Every repository source is fully checked.
 - Source profiles: production `extensions/*.ts`; tests `test/*.test.ts`; exclusively test-used support `test/fixtures/stash-process.ts`, mapped to the test profile through the recorded override glob; production tooling `scripts/*.mjs`.
@@ -996,7 +996,7 @@ The following primary references describe tool behavior. This standard defines t
 
 #### QX-001: node:test registration allowance
 
-Rule, option, installed versions: `typescript/no-floating-promises` `allowForKnownSafeCalls` `[{ "from": "package", "package": "node:test", "name": ["nodeTest", "nodeAfter"] }]`; oxlint 1.90.0, oxlint-tsgolint 7.0.2005.
+Rule, option, installed versions: `typescript/no-floating-promises` `allowForKnownSafeCalls` `[{ "from": "package", "package": "node:test", "name": ["nodeTest", "nodeAfter"] }]`; oxlint 1.94.0, tsrs 7.1.0-beta.tsrs2.
 Scope: unawaited top-level and suite-body test registrations in `test/*.test.ts`, written as `import { test as nodeTest, after as nodeAfter } from "node:test"`.
 Diagnostic and contract: without the allowance every `nodeTest(...)` and `nodeAfter(...)` registration reports `typescript(no-floating-promises)`.
 Actual compliant alternative and cost: awaiting every registration is prohibited by Section 6.4 because it alters module evaluation and hook timing; a test-wide disable is broader than the allowance.
@@ -1037,7 +1037,7 @@ Review and revisit trigger: pi shipping a public viewport or TUI-mode test API.
 
 #### QX-005: Promise JSDoc cast in the smoke script
 
-Rule, option, installed versions: `typescript/no-unnecessary-type-assertion`, directive at `scripts/smoke-package-load.mjs:215`; typescript 7.0.2, oxlint 1.90.0, oxlint-tsgolint 7.0.2005.
+Rule, option, installed versions: `typescript/no-unnecessary-type-assertion`, directive at `scripts/smoke-package-load.mjs:215`; typescript 7.0.2, oxlint 1.94.0, tsrs 7.1.0-beta.tsrs2.
 Scope: the single `/** @type {Promise<void>} */ (new Promise(...))` in the concurrent-window smoke check.
 Diagnostic and contract: a checker disagreement — tsc requires the JSDoc hint so `resolve()` stays callable without arguments (TS2810), while oxlint reports the same assertion as unnecessary.
 Actual compliant alternative and cost: removing the cast fails typecheck; passing `undefined` to `resolve` trips `unicorn/no-useless-undefined`.

@@ -212,7 +212,7 @@ try {
   const concurrentDrafts = Array.from({ length: 8 }, (_, index) => `native-window-${index}`);
   const saves = await Promise.allSettled(
     concurrentDrafts.map((draft) => {
-      // oxlint-disable-next-line typescript/no-unnecessary-type-assertion -- QX-005: tsc requires this JSDoc hint so resolve() stays callable without arguments (TS2810); oxlint 1.90/tsgolint 7.0.2005 meanwhile considers the same assertion redundant.
+      // oxlint-disable-next-line typescript/no-unnecessary-type-assertion -- QX-005: tsc requires this JSDoc hint so resolve() stays callable without arguments (TS2810); oxlint 1.94/tsrs 7.1.0-beta.tsrs2 meanwhile considers the same assertion redundant.
       return /** @type {Promise<void>} */ (
         new Promise((settle, reject) => {
           const child = spawn(pi, useBinOverride ? args : [cli, ...args], {
