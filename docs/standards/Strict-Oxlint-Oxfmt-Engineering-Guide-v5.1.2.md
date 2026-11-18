@@ -233,7 +233,7 @@ Native runtime type stripping is not typechecking and does not implement arbitra
 
 ### 5.1 Published tools and compatibility
 
-Use the latest stable published releases of Oxlint, `tsrs` (`tsrs-lint` for type-aware rules, replacing `oxlint-tsgolint`), Oxfmt, and any additional quality-tooling packages introduced by this standard. Resolve current releases when adopting or upgrading the toolchain. This standard prescribes no package version numbers or upgrade waiting period. Keep the canonical compiler/framework checker as a separate required gate.
+Use the latest stable published releases of Oxlint, `oxlint-tsgolint`, Oxfmt, and any additional quality-tooling packages introduced by this standard. Resolve current releases when adopting or upgrading the toolchain. This standard prescribes no package version numbers or upgrade waiting period. Keep the canonical compiler/framework checker as a separate required gate.
 
 Keep dependencies current through the repository's update workflow. Commit the updated dependency declarations and lockfile with each upgrade so local development, agents, CI, and supported editor integrations use the same resolved dependency tree. The lockfile records the current installation for reproducibility; it does not restrict how frequently dependencies may be updated. Automated and frequent upgrades are permitted.
 
@@ -982,7 +982,7 @@ The following primary references describe tool behavior. This standard defines t
 
 - Repository: [fitchmultz/pi-stash](https://github.com/fitchmultz/pi-stash). Adopted standard: this file, version 5.1.2.
 - Runtimes and package manager: Node.js 24.22.3 (24.x) or 26.13.1 and later (TypeScript type stripping runs sources, tests, and fixtures without a build step), npm with a committed lockfile. Local verification ran on Node.js 24.22.2.
-- Installed tool versions at adoption: oxlint 1.94.0, oxfmt 0.79.0, tsrs 7.1.0-beta.tsrs2, typescript 7.0.2, @types/node 24.19.1; host packages @earendil-works/pi-coding-agent 1.0.0 and @earendil-works/pi-tui 1.0.0.
+- Installed tool versions at this revision: oxlint 1.94.0, oxfmt 0.79.0, tsrs 7.1.0-beta.tsrs2 (`tsrs` replaces stable `oxlint-tsgolint` under QX-007 below), typescript 7.0.2, @types/node 24.19.1; host packages @earendil-works/pi-coding-agent 1.0.0 and @earendil-works/pi-tui 1.0.0.
 - Config paths: [.oxlintrc.json](../../.oxlintrc.json) (Appendix A baseline plus the recorded deltas below), [.oxfmtrc.json](../../.oxfmtrc.json) (Section 7.1 defaults), [tsconfig.json](../../tsconfig.json) (Section 4.2 settings).
 - Compiler projects: one tsconfig covering `extensions/`, `test/`, and `scripts/`, with `allowJs`/`checkJs` for the checked-JS tooling scripts. The repository has no handwritten declarations; `skipLibCheck` is retained under the Section 4.2 application posture because the only declaration failures are inside dependency packages (pi-ai JSON import attributes, @google/genai unresolved types). Every repository source is fully checked.
 - Source profiles: production `extensions/*.ts`; tests `test/*.test.ts`; exclusively test-used support `test/fixtures/stash-process.ts`, mapped to the test profile through the recorded override glob; production tooling `scripts/*.mjs`.
@@ -990,7 +990,7 @@ The following primary references describe tool behavior. This standard defines t
 - Acceptance: `npm run check` aggregates `format:check`, `lint`, `typecheck`, `coverage`, `policy`, `test`, and `pack` with per-step results and an aggregate exit status. `npm run check:compat` adds the native smoke run and is the hosted compatibility workflow's command. The policy step compares the effective lint configuration against the Appendix A baseline in this file on both a production and a test target; the coverage step verifies compiler, lint, and formatter membership for every maintained file and selects a probe violation in a new file.
 - Qualification evidence: `test/standards.test.ts` holds the standing controls — all six Section 6.4 node:test boundaries, the six production structural metrics with test-profile counterparts, explicit-rule, category, and type-aware composition, and directive boundaries. Disposable acceptance-wiring mutations (one gate broken at a time, each restored before final verification) produced a failing aggregate with the intended step failing in every run: lint (debugger statement), typecheck (ill-typed assignment; the dependent coverage step reported BLOCKED on its compiler prerequisite), formatter (misformatted maintained source), test (failing assertion), policy (`no-debugger` downgraded to warn), and coverage (`ignorePatterns` exclusion).
 - Migration status: complete. Finding budgets, baseline filtering, and incomplete-source exemptions were never introduced. Intentional behavior change during repair: stash parse failures now attach their `cause` to the reported error. No other observable behavior changed.
-- Exact integrated verification: `npm run check` passed on the complete tree this record commits (45 tests, aggregate green, oxlint and oxfmt idempotent). Hosted compatibility CI runs the same aggregate via `npm run check:compat` on the pushed revision.
+- Exact integrated verification: `npm run check:compat` (format:check, lint, typecheck, coverage, policy, test — 45 tests including all six §6.4 controls in `test/standards.test.ts` — pack, smoke) passed on 2026-11-18 with oxlint 1.94.0 + tsrs 7.1.0-beta.tsrs2 + oxfmt 0.79.0. Hosted compatibility CI runs the same aggregate via `npm run check:compat` on the pushed revision.
 
 ### Quality-exception record
 
@@ -1054,3 +1054,13 @@ Actual compliant alternative and cost: discarding the inner promise with `void` 
 Chosen adjustment and why: a one-site directive; every failure path inside the handler is caught and reported through `process.send`, and an unexpected rejection crashes the child, which fails the parent test's awaited `once()` visibly.
 Retained protection and lost detection: async-callback misuse detection remains active everywhere else.
 Review and revisit trigger: a supported pattern for async child-process message handlers.
+
+#### QX-007: prerelease tsrs type-aware backend in place of stable oxlint-tsgolint
+
+Rule, option, installed versions: Section 5.1 ("latest stable published releases of Oxlint, `oxlint-tsgolint`, Oxfmt"); oxlint 1.94.0 (2026-11-16T12:26Z), tsrs 7.1.0-beta.tsrs2 (2026-11-16T11:59Z), oxfmt 0.79.0 (2026-11-16T12:27Z).
+Scope: `package.json` / `package-lock.json` devDependencies and type-aware lint execution (`oxlint` auto-discovers `node_modules/.bin/tsrs-lint`; no directive or rule relaxation).
+Diagnostic and contract: Section 5.1 asks for stable published releases, whereas `tsrs` publishes prereleases only (`dist-tags.latest` is `0.25.0-ts7.1.0-beta`; `7.1.0-beta.tsrs2` is an untagged prerelease; stable `oxlint-tsgolint@7.0.2007` remains published on npm).
+Actual compliant alternative and cost: keeping stable `oxlint-tsgolint@7.0.2007` preserves Section 5.1 directly at ~2.9x–5.3x slower type-aware lint runtime and ~3x–6x higher peak memory across ecosystem repos.
+Chosen adjustment and why: owner-approved substitution of `tsrs@7.1.0-beta.tsrs2`; `oxlint 1.94.0` discovers `tsrs-lint` natively and fails closed if missing, while `npm run check` / `test/standards.test.ts` exercises all six §6.4 controls and `scripts/check-policy.mjs` against it.
+Retained protection and lost detection: all Appendix A type-aware rules, `QX-001`..`QX-006` protections, and `tsc --noEmit` remain active; assumes `tsrs@7.1.0-beta.tsrs2` keeps diagnostic parity with `oxlint-tsgolint`.
+Review and revisit trigger: first stable `tsrs` release, any `oxlint` upgrade changing backend discovery, or any type-aware diagnostic regression.
