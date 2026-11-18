@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.4.12 - 2026-11-18
+
+<!-- npm-release:unreleased:start -->
+<!-- npm-release:unreleased:end -->
+
+- ci: release through direct signed version commits (PEA-211) (#65) ([6e8d1cb](https://github.com/fitchmultz/pi-stash/commit/6e8d1cbdb59a4d10c87e1ba0d38bbf5cf0a766fe))
+
+### What's Changed
+
+- ci: release through direct signed version commits (PEA-211) (1/1) by @fitchmultz in https://github.com/fitchmultz/pi-stash/pull/65
+- fix(ui,ci): sanitize draft previews with pi-tui, guard ctx.hasUI, and use shared CI by @fitchmultz in https://github.com/fitchmultz/pi-stash/pull/66
+
+**Full Changelog**: https://github.com/fitchmultz/pi-stash/compare/v0.4.11...v0.4.12
+
 ## 0.4.11 - 2026-11-14
 
 <!-- npm-release:unreleased:start -->
