@@ -148,10 +148,19 @@ function saveDrafts(cwd: string, drafts: readonly string[]): void {
 }
 
 function updateStatus(ctx: ExtensionContext, drafts: readonly string[]): void {
+  if (!ctx.hasUI) {
+    return;
+  }
   ctx.ui.setStatus(
     "pi-stash",
     drafts.length === 0 ? undefined : ctx.ui.theme.fg("accent", `📦 ${countLabel(drafts.length)}`),
   );
+}
+
+function notify(ctx: ExtensionContext, message: string, type: "info" | "warning" | "error"): void {
+  if (ctx.hasUI) {
+    ctx.ui.notify(message, type);
+  }
 }
 
 function updateDrafts(ctx: ExtensionContext, update: (drafts: string[]) => string[]): string[] {
@@ -181,34 +190,27 @@ function updateDrafts(ctx: ExtensionContext, update: (drafts: string[]) => strin
   return drafts;
 }
 
-function ensureEditor(ctx: ExtensionContext, action: string): boolean {
-  if (ctx.hasUI) {
-    return true;
-  }
-  ctx.ui.notify(`${action} requires the interactive editor`, "warning");
-  return false;
-}
-
 function stashDraft(ctx: ExtensionContext, draft: string): void {
   const outcome = { dropped: false };
   const drafts = updateDrafts(ctx, (current) => {
     outcome.dropped = current.length >= MAX_STASHED_DRAFTS;
     return pushDraft(current, draft);
   });
-  ctx.ui.notify(
+  notify(
+    ctx,
     `Stashed ${countLabel(drafts.length)}: ${previewDraft(draft)}${outcome.dropped ? " Oldest draft dropped." : ""}`,
     "info",
   );
 }
 
 function stashEditor(ctx: ExtensionContext): void {
-  if (!ensureEditor(ctx, "Stashing")) {
+  if (!ctx.hasUI) {
     return;
   }
 
   const draft = ctx.ui.getEditorText();
   if (isBlankDraft(draft)) {
-    ctx.ui.notify("Nothing to stash", "warning");
+    notify(ctx, "Nothing to stash", "warning");
     return;
   }
 
@@ -221,7 +223,7 @@ async function restoreDraft(
   draft: string,
   interaction: AbortController,
 ): Promise<void> {
-  if (!ensureEditor(ctx, "Restoring")) {
+  if (!ctx.hasUI) {
     return;
   }
 
@@ -235,7 +237,7 @@ async function restoreDraft(
       return;
     }
     if (!confirmed) {
-      ctx.ui.notify("Restore cancelled", "info");
+      notify(ctx, "Restore cancelled", "info");
       return;
     }
   }
@@ -247,7 +249,7 @@ async function restoreDraft(
     }
     return withoutDraft(current, draft);
   });
-  ctx.ui.notify(`Restored draft: ${previewDraft(draft)}`, "info");
+  notify(ctx, `Restored draft: ${previewDraft(draft)}`, "info");
 }
 
 async function handleUnsupportedClient(
@@ -257,7 +259,8 @@ async function handleUnsupportedClient(
   onUnsupported: "list" | "restore-latest",
 ): Promise<void> {
   if (onUnsupported === "restore-latest") {
-    ctx.ui.notify(
+    notify(
+      ctx,
       "Stash picker unavailable in this client; using the latest stash for restore.",
       "info",
     );
@@ -270,13 +273,16 @@ async function handleUnsupportedClient(
   const summary = drafts
     .map((draft, index) => `${index + 1}. ${previewDraft(draft, 64)}`)
     .join("\n");
-  ctx.ui.notify(`Stashed drafts (latest first):\n${summary}`, "info");
+  notify(ctx, `Stashed drafts (latest first):\n${summary}`, "info");
 }
 
 async function clearStashes(
   ctx: ExtensionContext,
   interaction: AbortController,
 ): Promise<"cleared" | "kept" | "aborted"> {
+  if (!ctx.hasUI) {
+    return "kept";
+  }
   const confirmed = await ctx.ui.confirm("Clear all stashes?", "Delete all stashed drafts?", {
     signal: interaction.signal,
   });
@@ -287,7 +293,7 @@ async function clearStashes(
     return "kept";
   }
   updateDrafts(ctx, () => []);
-  ctx.ui.notify("Cleared stashed drafts", "info");
+  notify(ctx, "Cleared stashed drafts", "info");
   return "cleared";
 }
 
@@ -323,7 +329,7 @@ async function browseDrafts(
 
     const draft = drafts[result.index];
     if (draft === undefined) {
-      ctx.ui.notify("No stashed draft at that position", "warning");
+      notify(ctx, "No stashed draft at that position", "warning");
       selectedIndex = 0;
       continue;
     }
@@ -332,7 +338,7 @@ async function browseDrafts(
     }
 
     drafts = updateDrafts(ctx, (current) => withoutDraft(current, draft));
-    ctx.ui.notify(`Deleted stashed draft: ${previewDraft(draft)}`, "info");
+    notify(ctx, `Deleted stashed draft: ${previewDraft(draft)}`, "info");
     selectedIndex = result.index;
   }
 }
@@ -342,12 +348,12 @@ async function manageDrafts(
   interaction: AbortController,
   onUnsupported: "list" | "restore-latest",
 ): Promise<void> {
-  if (!ensureEditor(ctx, "Listing stashes")) {
+  if (!ctx.hasUI) {
     return;
   }
   const drafts = loadDrafts(ctx.cwd);
   if (drafts.length === 0) {
-    ctx.ui.notify("No stashed drafts", "info");
+    notify(ctx, "No stashed drafts", "info");
     return;
   }
   await browseDrafts(ctx, drafts, interaction, onUnsupported);
@@ -357,9 +363,12 @@ async function restoreLatestOrPick(
   ctx: ExtensionContext,
   interaction: AbortController,
 ): Promise<void> {
+  if (!ctx.hasUI) {
+    return;
+  }
   const drafts = loadDrafts(ctx.cwd);
   if (drafts.length === 0) {
-    ctx.ui.notify("No stashed drafts", "warning");
+    notify(ctx, "No stashed drafts", "warning");
     return;
   }
   const latest = latestDraft(drafts);
@@ -395,7 +404,8 @@ function importSessionDrafts(pi: ExtensionAPI, ctx: ExtensionContext): void {
     outcome.dropped > 0
       ? ` ${countLabel(outcome.dropped)} over the limit stayed in the session history.`
       : "";
-  ctx.ui.notify(
+  notify(
+    ctx,
     `Imported ${countLabel(outcome.imported)} from this session into the project stash.${suffix}`,
     "info",
   );
@@ -436,7 +446,7 @@ function registerShortcutsAndCommands(
           return;
         }
         if (isBlankDraft(args)) {
-          ctx.ui.notify("Nothing to stash", "warning");
+          notify(ctx, "Nothing to stash", "warning");
           return;
         }
         try {
@@ -502,7 +512,9 @@ export default function piStash(pi: ExtensionAPI): void {
 
   pi.on("session_shutdown", (_event, ctx) => {
     reset();
-    ctx.ui.setStatus("pi-stash", undefined);
+    if (ctx.hasUI) {
+      ctx.ui.setStatus("pi-stash", undefined);
+    }
   });
 
   pi.on("session_tree", (_event, ctx) => {

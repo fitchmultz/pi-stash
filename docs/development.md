@@ -65,7 +65,7 @@ node /path/to/automation/scripts/qualify.mjs \
   --output /tmp/pi-stash-fork
 ```
 
-For the fork target, use a packed build of the latest maintained fork. See the [compatibility workflow](../.github/workflows/pi-compatibility.yml) for its build and pack steps.
+For the fork target, use a packed build of the latest maintained fork. See the [shared compatibility workflow](https://github.com/fitchmultz/.github/blob/main/.github/workflows/pi-compatibility.yml) for its build and pack steps.
 
 ## Automatic npm releases
 

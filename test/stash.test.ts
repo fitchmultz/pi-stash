@@ -159,6 +159,7 @@ function createContext(options: {
   confirmResult?: boolean;
   confirm?: (title: string, message: string, options?: TestDialogOptions) => Promise<boolean>;
   mode?: TestContext["mode"];
+  hasUI?: boolean;
 }) {
   const notifications: Notification[] = [];
   const statuses: StatusUpdate[] = [];
@@ -167,7 +168,7 @@ function createContext(options: {
 
   const ctx: TestContext = {
     mode: options.mode ?? "rpc",
-    hasUI: true,
+    hasUI: options.hasUI ?? true,
     cwd: options.cwd ?? `/project/${randomUUID()}`,
     ui: {
       theme: { fg: (_name, value) => value, bold: (value) => value },
@@ -780,5 +781,34 @@ nodeTest(
     assert.equal(confirmationSignal?.aborted, true);
     assert.equal(context.editorText, "");
     assert.deepEqual(storedDrafts(cwd), ["latest"]);
+  },
+);
+
+nodeTest(
+  "commands, shortcuts, and lifecycle events never touch ctx.ui when hasUI is false",
+  async () => {
+    const cwd = `/project/${randomUUID()}`;
+    const branch = [stashSnapshot("legacy draft")];
+    const harness = createHarness((type, data) => {
+      branch.push({ type: "custom", customType: type, data });
+    });
+    const context = createContext({ cwd, mode: "print", hasUI: false, branchEntries: branch });
+    Object.defineProperty(context.ctx, "ui", {
+      get() {
+        throw new Error("ctx.ui must not be accessed when hasUI is false");
+      },
+    });
+
+    await requiredEvent(harness, "session_start")({}, context.ctx);
+    await requiredEvent(harness, "session_tree")({}, context.ctx);
+    await requiredCommand(harness, "stash").handler("", context.ctx);
+    await requiredCommand(harness, "stash").handler("   ", context.ctx);
+    await requiredCommand(harness, "stash").handler("explicit headless draft", context.ctx);
+    await requiredShortcut(harness, "ctrl+shift+s").handler(context.ctx);
+    await requiredShortcut(harness, "ctrl+shift+r").handler(context.ctx);
+    await requiredCommand(harness, "stash-list").handler("", context.ctx);
+    await requiredEvent(harness, "session_shutdown")({}, context.ctx);
+
+    assert.deepEqual(storedDrafts(cwd), ["explicit headless draft", "legacy draft"]);
   },
 );

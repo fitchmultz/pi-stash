@@ -109,7 +109,7 @@ export async function showDraftPicker(
   if (interaction.signal.aborted) {
     return { action: "cancel" };
   }
-  if (ctx.mode !== "tui") {
+  if (!ctx.hasUI || ctx.mode !== "tui") {
     return { action: "unsupported" };
   }
 

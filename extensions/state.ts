@@ -6,6 +6,12 @@
  * Invariants/Assumptions: Drafts are stored newest-first and blank-draft filtering happens before stack mutation helpers run.
  */
 
+import {
+  replaceControlCharacters,
+  stripTerminalSequences,
+  truncateToWidth,
+} from "@earendil-works/pi-tui";
+
 export const MAX_STASHED_DRAFTS = 10;
 export const STASH_ENTRY_TYPE = "pi-stash";
 
@@ -68,11 +74,10 @@ export function clampSelectedIndex(index: number, length: number): number {
 }
 
 export function previewDraft(draft: string, maxLength = 72): string {
-  const flattened = draft.replace(/\s+/g, " ").trim();
-  if (flattened.length <= maxLength) {
-    return flattened;
-  }
-  return `${flattened.slice(0, Math.max(0, maxLength - 1))}…`;
+  const flattened = replaceControlCharacters(stripTerminalSequences(draft))
+    .replace(/\s+/g, " ")
+    .trim();
+  return stripTerminalSequences(truncateToWidth(flattened, maxLength, "…"));
 }
 
 export function hydrateState(entries: readonly PersistedEntry[]): string[] {
