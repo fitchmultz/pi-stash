@@ -45,7 +45,7 @@ function parseDiagnostic(entry: unknown): Diagnostic {
   }
   const code = typeof entry.code === "string" ? entry.code : undefined;
   const labels: unknown[] = Array.isArray(entry.labels) ? entry.labels : [];
-  const first = labels.length > 0 ? labels[0] : undefined;
+  const first = labels[0];
   if (!isRecord(first) || !isRecord(first.span) || typeof first.span.line !== "number") {
     assert.fail("oxlint diagnostic must carry a location label with a line");
   }
