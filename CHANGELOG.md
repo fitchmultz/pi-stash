@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Raise the tested Pi floor to 1.6.1.
+
 ## 0.4.12 - 2026-11-18
 
 <!-- npm-release:unreleased:start -->

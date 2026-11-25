@@ -983,7 +983,7 @@ The following primary references describe tool behavior. This standard defines t
 - Repository: [fitchmultz/pi-stash](https://github.com/fitchmultz/pi-stash). Adopted standard: this file, version 5.1.2.
 - Runtimes and package manager: Node.js 24.22.3 (24.x) or 26.13.1 and later (TypeScript type stripping runs sources, tests, and fixtures without a build step), npm with a committed lockfile. Local verification ran on Node.js 24.22.2.
 - Installed tool versions at adoption: oxlint 1.90.0, oxfmt 0.75.0, oxlint-tsgolint 7.0.2005, typescript 7.0.2, @types/node 24.19.1; host packages @earendil-works/pi-coding-agent 1.0.0 and @earendil-works/pi-tui 1.0.0.
-- Installed tool versions at current revision: oxlint 1.94.0, oxfmt 0.79.0, tsrs 7.1.0-beta.tsrs2 (`tsrs` replaces stable `oxlint-tsgolint` under QX-007 below), typescript 7.0.2, @types/node 24.19.1; host packages @earendil-works/pi-coding-agent 1.6.0 and @earendil-works/pi-tui 1.6.0.
+- Installed tool versions at current revision: oxlint 1.94.0, oxfmt 0.79.0, tsrs 7.1.0-beta.tsrs2 (`tsrs` replaces stable `oxlint-tsgolint` under QX-007 below), typescript 7.0.2, @types/node 24.19.1; host packages @earendil-works/pi-coding-agent 1.6.1 and @earendil-works/pi-tui 1.6.1.
 - Config paths: [.oxlintrc.json](../../.oxlintrc.json) (Appendix A baseline plus the recorded deltas below), [.oxfmtrc.json](../../.oxfmtrc.json) (Section 7.1 defaults), [tsconfig.json](../../tsconfig.json) (Section 4.2 settings).
 - Compiler projects: one tsconfig covering `extensions/`, `test/`, and `scripts/`, with `allowJs`/`checkJs` for the checked-JS tooling scripts. The repository has no handwritten declarations; `skipLibCheck` is retained under the Section 4.2 application posture because the only declaration failures are inside dependency packages (pi-ai JSON import attributes, @google/genai unresolved types). Every repository source is fully checked.
 - Source profiles: production `extensions/*.ts`; tests `test/*.test.ts`; exclusively test-used support `test/fixtures/stash-process.ts`, mapped to the test profile through the recorded override glob; production tooling `scripts/*.mjs`.
@@ -1008,7 +1008,7 @@ Review and revisit trigger: changes to the repository's node:test import forms o
 
 #### QX-002: KeyId cast in shortcut resolution
 
-Rule, option, installed versions: `typescript/no-unsafe-type-assertion`, directive at `extensions/stash.ts:64`; pi-tui 1.6.0 (adopted at 1.0.0).
+Rule, option, installed versions: `typescript/no-unsafe-type-assertion`, directive at `extensions/stash.ts:64`; pi-tui 1.6.1 (adopted at 1.0.0).
 Scope: the single `return value as KeyId` in `resolveShortcut`, reached only after `isRecord` and string validation of the parsed config entry.
 Diagnostic and contract: pi-tui exports `KeyId` as a type-only union in `dist/keys.d.ts` with no runtime validator, so no sound narrowing exists for a validated keybinding string.
 Actual compliant alternative and cost: duplicating the `KeyId` union in this repository would restate a host contract and drift from it.
@@ -1018,7 +1018,7 @@ Review and revisit trigger: pi-tui shipping a runtime `KeyId` validator.
 
 #### QX-003: partial host mocks in the test harness
 
-Rule, option, installed versions: `typescript/no-unsafe-type-assertion`, directives at `test/stash.test.ts:123` and `test/fixtures/stash-process.ts:54`; pi-coding-agent 1.6.0 (adopted at 1.0.0).
+Rule, option, installed versions: `typescript/no-unsafe-type-assertion`, directives at `test/stash.test.ts:123` and `test/fixtures/stash-process.ts:54`; pi-coding-agent 1.6.1 (adopted at 1.0.0).
 Scope: two test-only casts that build partial mocks of host UI and extension API objects; the captured handlers are invoked against the fixture's own context type.
 Diagnostic and contract: the host interfaces cannot be implemented partially without a cast, and the mocks exist to drive the extension's registration path.
 Actual compliant alternative and cost: fully implementing the host interfaces in tests would duplicate the SDK surface for no additional coverage.
@@ -1028,7 +1028,7 @@ Review and revisit trigger: the SDK exposing an official test harness or partial
 
 #### QX-004: host internals in the native UI test
 
-Rule, option, installed versions: `typescript/no-unsafe-type-assertion`, directive at `test/native-ui.test.ts:19`; pi-coding-agent 1.6.0 (adopted at 1.0.0).
+Rule, option, installed versions: `typescript/no-unsafe-type-assertion`, directive at `test/native-ui.test.ts:19`; pi-coding-agent 1.6.1 (adopted at 1.0.0).
 Scope: one cast of `InteractiveMode` to `{ renderer, switchTuiMode }`, used only by `test/native-ui.test.ts` to observe rendered output and switch fullscreen/regular TUI modes.
 Diagnostic and contract: pi exposes no public viewport observer or TUI-mode switch API; the test cannot assert both modes and pointer handling without them.
 Actual compliant alternative and cost: dropping the assertions removes the only coverage of the regular-mode layout, pointer restore, reload settlement, and dialog-stack cleanup.
