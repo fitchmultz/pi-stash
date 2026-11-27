@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-- Raise the tested Pi floor to 1.6.1.
+- Raise the tested Pi floor to 1.7.0.
 
 ## 0.4.12 - 2026-11-18
 
